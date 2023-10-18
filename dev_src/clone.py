@@ -27,7 +27,7 @@ def get_list_dir(path):
 	o = []
 	for f in os.listdir(path):
 		if os.path.isdir(path+f):
-			o.append(f+"/")
+			o.append(f"{f}/")
 		else:
 			o.append(f)
 	return o
@@ -99,15 +99,15 @@ def dl(url, path, overwrite, check_method):
 	"""
 	if not overwrite:
 		exist = check_exist(url, path, check_method)
-		
+
 		if exist is True: 
 			print("EXIST: ", path)
 			return
 		if exist is None: return # failed response
 
 
-	local_filename = path + ".cloneTMP"
-	
+	local_filename = f"{path}.cloneTMP"
+
 	mtime = None
 
 	try:
@@ -124,8 +124,8 @@ def dl(url, path, overwrite, check_method):
 			os.remove(local_filename)
 		except OSError:
 			return
-	
-	
+
+
 	os.replace(local_filename, path)
 	os.utime(path, (mtime, mtime))
 
@@ -148,7 +148,7 @@ def clone(url, path = "./", overwrite = False, check_exist = "date", delete_extr
 	def get_json(url):
 		
 		try:
-			u = url+"?json"
+			u = f"{url}?json"
 			#print(u)
 			json = session.get(u).json()
 			return json
@@ -166,7 +166,7 @@ def clone(url, path = "./", overwrite = False, check_exist = "date", delete_extr
 		json = get_json(url)
 		if not json:
 			return
-			
+
 		os.makedirs(path, exist_ok=True)
 
 
@@ -178,15 +178,15 @@ def clone(url, path = "./", overwrite = False, check_exist = "date", delete_extr
 			if link.endswith("/"):
 				Q.put((url+link, path+name, overwrite, check_exist))
 				continue
-				
+
 			futures.append(executor.submit(dl, url+link, path+name, overwrite, check_exist))
 
-			
+
 		if delete_extras:
 			# get local file list with os.listdir(path)
 			local_list = get_list_dir(path)
 			#print(local_list)
-			
+
 			for name in local_list:
 				if name not in remote_list:
 					print("DELETE: [", path+name, "]")

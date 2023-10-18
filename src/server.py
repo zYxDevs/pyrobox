@@ -123,9 +123,8 @@ def run_update():
 		return True
 
 
-	else:
-		print("Failed to load ", i)
-		return False
+	print("Failed to load ", i)
+	return False
 
 
 
@@ -168,7 +167,7 @@ class SH(SH_base):
 def list_directory_json(self:SH, path=None):
 	"""Helper to produce a directory listing (JSON).
 	Return json file of available files and folders"""
-	if path == None:
+	if path is None:
 		path = self.translate_path(self.path)
 
 	try:
@@ -187,10 +186,10 @@ def list_directory_json(self:SH, path=None):
 
 
 		if file.is_dir():
-			displayname = name + "/"
-			linkname = name + "/"
+			displayname = f"{name}/"
+			linkname = f"{name}/"
 		elif file.is_symlink():
-			displayname = name + "@"
+			displayname = f"{name}@"
 
 		dir_dict.append([urllib.parse.quote(linkname, errors='surrogatepass'),
 						html.escape(displayname, quote=False)])
@@ -215,23 +214,20 @@ def list_directory(self:SH, path):
 			HTTPStatus.NOT_FOUND,
 			"No permission to list directory")
 		return None
-	r = []
-
 	displaypath = self.get_displaypath(self.url_path)
 
 
 	title = get_titles(displaypath)
 
 
-	r.append(pt.directory_explorer_header().safe_substitute(PY_PAGE_TITLE=title,
-													PY_PUBLIC_URL=config.address(),
-													PY_DIR_TREE_NO_JS=dir_navigator(displaypath)))
-
+	r = [
+		pt.directory_explorer_header().safe_substitute(
+			PY_PAGE_TITLE=title,
+			PY_PUBLIC_URL=config.address(),
+			PY_DIR_TREE_NO_JS=dir_navigator(displaypath),
+		)
+	]
 	r_li= [] # type + file_link
-				# f  : File
-				# d  : Directory
-				# v  : Video
-				# h  : HTML
 	f_li = [] # file_names
 	s_li = [] # size list
 
@@ -257,10 +253,10 @@ def list_directory(self:SH, path):
 		# Append / for directories or @ for symbolic links
 		_is_dir_ = True
 		if file.is_dir():
-			displayname = name + "/"
-			linkname = name + "/"
+			displayname = f"{name}/"
+			linkname = f"{name}/"
 		elif file.is_symlink():
-			displayname = name + "@"
+			displayname = f"{name}@"
 		else:
 			_is_dir_ =False
 			size = fmbytes(file.stat().st_size)
@@ -271,31 +267,26 @@ def list_directory(self:SH, path):
 									html.escape(displayname, quote=False)))
 
 				r_li.append('h'+ urllib.parse.quote(linkname, errors='surrogatepass'))
-				f_li.append(html.escape(displayname, quote=False))
-
 			elif self.guess_type(linkname).startswith('video/'):
 				r_files.append(LIST_STRING % ("vid", urllib.parse.quote(linkname,
 									errors='surrogatepass'),
 									html.escape(displayname, quote=False)))
 
 				r_li.append('v'+ urllib.parse.quote(linkname, errors='surrogatepass'))
-				f_li.append(html.escape(displayname, quote=False))
-
 			elif self.guess_type(linkname).startswith('image/'):
 				r_files.append(LIST_STRING % ("file", urllib.parse.quote(linkname,
 									errors='surrogatepass'),
 									html.escape(displayname, quote=False)))
 
 				r_li.append('i'+ urllib.parse.quote(linkname, errors='surrogatepass'))
-				f_li.append(html.escape(displayname, quote=False))
-
 			else:
 				r_files.append(LIST_STRING % ("file", urllib.parse.quote(linkname,
 									errors='surrogatepass'),
 									html.escape(displayname, quote=False)))
 
 				r_li.append('f'+ urllib.parse.quote(linkname, errors='surrogatepass'))
-				f_li.append(html.escape(displayname, quote=False))
+			f_li.append(html.escape(displayname, quote=False))
+
 		if _is_dir_:
 			r_folders.append(LIST_STRING % ("", urllib.parse.quote(linkname,
 									errors='surrogatepass'),
@@ -311,15 +302,21 @@ def list_directory(self:SH, path):
 	r.extend(r_folders)
 	r.extend(r_files)
 
-	r.append("""</ul>
+	r.extend(
+		(
+			"""</ul>
 				</div>
 				<!-- END CONTENT LIST (NO JS) -->
 				<div id="js-content_list" class="jsonly"></div>
-			""")
-
-	r.append(pt.file_list().safe_substitute())
-
-	if not (cli_args.no_upload or cli_args.read_only or cli_args.view_only):
+			""",
+			pt.file_list().safe_substitute(),
+		)
+	)
+	if (
+		not cli_args.no_upload
+		and not cli_args.read_only
+		and not cli_args.view_only
+	):
 
 		r.append(pt.upload_form().safe_substitute(PY_PUBLIC_URL=config.address()))
 
@@ -452,8 +449,9 @@ def admin_page(self: SH, *args, **kwargs):
 @SH.on_req('HEAD', hasQ="update")
 def update(self: SH, *args, **kwargs):
 	"""Check for update and return the latest version"""
-	data = fetch_url("https://raw.githubusercontent.com/RaSan147/py_httpserver_Ult/main/VERSION")
-	if data:
+	if data := fetch_url(
+		"https://raw.githubusercontent.com/RaSan147/py_httpserver_Ult/main/VERSION"
+	):
 		data  = data.decode("utf-8").strip()
 		ret = json.dumps({"update_available": data > __version__, "latest_version": data})
 		return self.return_txt(HTTPStatus.OK, ret)
@@ -465,13 +463,10 @@ def update_now(self: SH, *args, **kwargs):
 	"""Run update"""
 	if config.disabled_func["update"]:
 		return self.return_txt(HTTPStatus.OK, json.dumps({"status": 0, "message": "UPDATE FEATURE IS UNAVAILABLE !"}))
+	if data := run_update():
+		return self.return_txt(HTTPStatus.OK, json.dumps({"status": 1, "message": "UPDATE SUCCESSFUL !"}))
 	else:
-		data = run_update()
-
-		if data:
-			return self.return_txt(HTTPStatus.OK, json.dumps({"status": 1, "message": "UPDATE SUCCESSFUL !"}))
-		else:
-			return self.return_txt(HTTPStatus.OK, json.dumps({"status": 0, "message": "UPDATE FAILED !"}))
+		return self.return_txt(HTTPStatus.OK, json.dumps({"status": 0, "message": "UPDATE FAILED !"}))
 
 @SH.on_req('HEAD', hasQ="size")
 def get_size(self: SH, *args, **kwargs):
@@ -483,11 +478,7 @@ def get_size(self: SH, *args, **kwargs):
 	stat = get_stat(xpath)
 	if not stat:
 		return self.return_txt(HTTPStatus.OK, json.dumps({"status": 0}))
-	if os.path.isfile(xpath):
-		size = stat.st_size
-	else:
-		size = get_dir_size(xpath)
-
+	size = stat.st_size if os.path.isfile(xpath) else get_dir_size(xpath)
 	humanbyte = humanbytes(size)
 	fmbyte = fmbytes(size)
 	return self.return_txt(HTTPStatus.OK, json.dumps({"status": 1,
@@ -536,7 +527,7 @@ def create_zip(self: SH, *args, **kwargs):
 	# 	return self.return_txt(HTTPStatus.OK, msg)
 
 	displaypath = self.get_displaypath(url_path)
-	filename = spathsplit[-2] + ".zip"
+	filename = f"{spathsplit[-2]}.zip"
 
 	title = "Creating ZIP"
 
@@ -580,7 +571,7 @@ def get_zip(self: SH, *args, **kwargs):
 		return reply("ERROR", msg)
 
 
-	filename = spathsplit[-2] + ".zip"
+	filename = f"{spathsplit[-2]}.zip"
 
 	id = query["zid"][0]
 
@@ -631,18 +622,19 @@ def send_video_page(self: SH, *args, **kwargs):
 		self.send_error(HTTPStatus.NOT_FOUND, "THIS IS NOT A VIDEO FILE")
 		return None
 
-	r = []
-
 	displaypath = self.get_displaypath(url_path)
 
 
 
 	title = get_titles(displaypath, file=True)
 
-	r.append(pt.directory_explorer_header().safe_substitute(PY_PAGE_TITLE=title,
-													PY_PUBLIC_URL=config.address(),
-													PY_DIR_TREE_NO_JS= dir_navigator(displaypath)))
-
+	r = [
+		pt.directory_explorer_header().safe_substitute(
+			PY_PAGE_TITLE=title,
+			PY_PUBLIC_URL=config.address(),
+			PY_DIR_TREE_NO_JS=dir_navigator(displaypath),
+		)
+	]
 	ctype = self.guess_type(path)
 	warning = ""
 
@@ -694,8 +686,7 @@ def default_get(self: SH, filename=None, *args, **kwargs):
 		if not parts.path.endswith('/'):
 			# redirect browser - doing basically what apache does
 			self.send_response(HTTPStatus.MOVED_PERMANENTLY)
-			new_parts = (parts[0], parts[1], parts[2] + '/',
-							parts[3], parts[4])
+			new_parts = parts[0], parts[1], f'{parts[2]}/', parts[3], parts[4]
 			new_url = urllib.parse.urlunsplit(new_parts)
 			self.send_header("Location", new_url)
 			self.send_header("Content-Length", "0")
@@ -754,21 +745,16 @@ def AUTHORIZE_POST(req: SH, post:DPD, post_type=''):
 	# GET UID
 	uid_verify = form.get_multi_field(verify_name='post-uid', decode=T)
 
-	uid = uid_verify[1]
+	if uid := uid_verify[1]:
+		##################################
 
-	if not uid:
+		# HANDLE USER PERMISSION BY CHECKING UID
+
+		##################################
+
+		return uid
+	else:
 		raise PostError("Invalid request: No uid provided")
-
-
-
-
-	##################################
-
-	# HANDLE USER PERMISSION BY CHECKING UID
-
-	##################################
-
-	return uid
 
 
 
@@ -819,7 +805,7 @@ def upload(self: SH, *args, **kwargs):
 		path = self.translate_path(self.path)
 		rltv_path = posixpath.join(url_path, fn)
 
-		temp_fn = os.path.join(path, ".LStemp-"+fn[0]+'.tmp')
+		temp_fn = os.path.join(path, f".LStemp-{fn[0]}.tmp")
 		config.temp_file.add(temp_fn)
 
 
@@ -839,9 +825,9 @@ def upload(self: SH, *args, **kwargs):
 				while post.remainbytes > 0:
 					line = post.get()
 					if post.boundary in line:
-						preline = preline[0:-1]
+						preline = preline[:-1]
 						if preline.endswith(b'\r'):
-							preline = preline[0:-1]
+							preline = preline[:-1]
 						out.write(preline)
 						uploaded_files.append(rltv_path,)
 						break
@@ -912,13 +898,13 @@ def del_2_recycle(self: SH, *args, **kwargs):
 	head = "Failed"
 	try:
 		send2trash(xpath)
-		msg = "Successfully Moved To Recycle bin"+ post.refresh
+		msg = f"Successfully Moved To Recycle bin{post.refresh}"
 		head = "Success"
 	except TrashPermissionError:
 		msg = "Recycling unavailable! Try deleting permanently..."
 	except Exception as e:
 		traceback.print_exc()
-		msg = "<b>" + path + "</b> " + e.__class__.__name__
+		msg = f"<b>{path}</b> {e.__class__.__name__}"
 
 	return self.send_json({"head": head, "body": msg})
 
@@ -957,12 +943,16 @@ def del_permanently(self: SH, *args, **kwargs):
 		if os.path.isfile(xpath): os.remove(xpath)
 		else: shutil.rmtree(xpath)
 
-		return self.send_json({"head": "Success", "body": "PERMANENTLY DELETED  " + path + post.refresh})
+		return self.send_json(
+			{"head": "Success", "body": f"PERMANENTLY DELETED  {path}{post.refresh}"}
+		)
 
 
 	except Exception as e:
 		traceback.print_exc()
-		return self.send_json({"head": "Failed", "body": "<b>" + path + "<b>" + e.__class__.__name__})
+		return self.send_json(
+			{"head": "Failed", "body": f"<b>{path}<b>{e.__class__.__name__}"}
+		)
 
 
 
@@ -1010,7 +1000,12 @@ def rename_content(self: SH, *args, **kwargs):
 		os.rename(xpath, new_path)
 		return self.send_json({"head": "Renamed Successfully", "body":  post.refresh})
 	except Exception as e:
-		return self.send_json({"head": "Failed", "body": "<b>" + path + "</b><br><b>" + e.__class__.__name__ + "</b> : " + str(e) })
+		return self.send_json(
+			{
+				"head": "Failed",
+				"body": f"<b>{path}</b><br><b>{e.__class__.__name__}</b> : {str(e)}",
+			}
+		)
 
 
 
@@ -1147,7 +1142,7 @@ def new_folder(self: SH, *args, **kwargs):
 
 	xpath = filename
 	if xpath.startswith(('../', '..\\', '/../', '\\..\\')) or '/../' in xpath or '\\..\\' in xpath or xpath.endswith(('/..', '\\..')):
-		return self.send_json({"head": "Failed", "body": "Invalid Path:  " + path})
+		return self.send_json({"head": "Failed", "body": f"Invalid Path:  {path}"})
 
 	xpath = self.translate_path(posixpath.join(url_path, filename))
 
@@ -1156,11 +1151,17 @@ def new_folder(self: SH, *args, **kwargs):
 
 	try:
 		if os.path.exists(xpath):
-			return self.send_json({"head": "Failed", "body": "Folder Already Exists:  " + path})
+			return self.send_json(
+				{"head": "Failed", "body": f"Folder Already Exists:  {path}"}
+			)
 		if os.path.isfile(xpath):
-			return self.send_json({"head": "Failed", "body": "File Already Exists:  " + path})
+			return self.send_json(
+				{"head": "Failed", "body": f"File Already Exists:  {path}"}
+			)
 		os.makedirs(xpath)
-		return self.send_json({"head": "Success", "body": "New Folder Created:  " + path +post.refresh})
+		return self.send_json(
+			{"head": "Success", "body": f"New Folder Created:  {path}{post.refresh}"}
+		)
 
 	except Exception as e:
 		self.log_error(traceback.format_exc())
