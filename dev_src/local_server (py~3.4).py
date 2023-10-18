@@ -173,9 +173,7 @@ class Tools:
 		term_col = shutil.get_terminal_size()[0]
 
 		s = self.styles[style] if style in self.styles else style
-		tt = ""
-		for i in text.split('\n'):
-			tt += i.center(term_col) + '\n'
+		tt = "".join(i.center(term_col) + '\n' for i in text.split('\n'))
 		return ("\n\n{head}\n{text}{foot}\n\n".format(head=s*term_col,
 													  text=tt,
 													  foot=s*term_col))
@@ -190,7 +188,7 @@ class Custom_dict(dict):
 		self.__dict__ = self
 
 	def __call__(self, *key):
-		return all([i in self for i in key])
+		return all(i in self for i in key)
 
 
 # FEATURES
@@ -434,11 +432,9 @@ def check_access(path):
 	path: path to the file
 	"""
 	if os.path.exists(path):
-		try:
+		with contextlib.suppress(Exception):
 			with open(path):
 				return True
-		except Exception:
-			pass
 	return False
 
 def get_stat(path):
@@ -455,10 +451,7 @@ def get_stat(path):
 		return False
 
 def get_file_count(path):
-	n = 0
-	for _,_,files in os.walk(path, onerror= print):
-		n += len(files)
-	return n
+	return sum(len(files) for _, _, files in os.walk(path, onerror= print))
 
 
 def get_dir_size(start_path = '.', limit=None, return_list= False, full_dir=True, both=False, must_read=False):
@@ -486,24 +479,22 @@ def get_dir_size(start_path = '.', limit=None, return_list= False, full_dir=True
 
 				total_size += stat.st_size
 			if limit!=None and total_size>limit:
-				if return_list: return -1, False
-				return -1
-
+				return (-1, False) if return_list else -1
 			if return_list:
 				if both: r.append((fp, fp.replace(start_path, "", 1)))
 				else:    r.append(fp if full_dir else fp.replace(start_path, "", 1))
 
-	if return_list: return total_size, r
-	return total_size
+	return (total_size, r) if return_list else total_size
 
 
 def fmbytes(B=None, path=None):
 	'Return the given bytes as a file manager friendly KB, MB, GB, or TB string'
 	if path:
-		stat = get_stat(path)
-		if not stat: return "Unknown"
-		B = stat.st_size
+		if stat := get_stat(path):
+			B = stat.st_size
 
+		else:
+			return "Unknown"
 	B = B
 	KB = 1024
 	MB = (KB ** 2) # 1,048,576
@@ -519,10 +510,7 @@ def fmbytes(B=None, path=None):
 		return '%.2f MB  '%(B/MB)
 	if B/KB>1:
 		return '%.2f KB  '%(B/KB)
-	if B>1:
-		return '%i bytes'%B
-
-	return "%i byte"%B
+	return '%i bytes'%B if B>1 else "%i byte"%B
 
 
 def humanbytes(B):
@@ -576,10 +564,7 @@ def list_dir(start_path = '.', full_dir=True, both=False):
 			else:
 				p.append(fp.replace(start_path, "", 1))
 
-	if both:
-		return b
-
-	return p
+	return b if both else p
 
 
 #############################################
@@ -641,7 +626,7 @@ try:
 
 
 
-			self.comment = 'Written using Zipfly v' + zf__version__
+			self.comment = f'Written using Zipfly v{zf__version__}'
 			self.mode = mode
 			self.paths = paths
 			self.filesystem = 'fs'
@@ -660,13 +645,13 @@ try:
 			stream = ZipflyStream()
 
 			with zipfile.ZipFile(
-				stream,
-				mode = self.mode,
-				compression = self.compression,
-				allowZip64 = self.allowZip64,) as zf:
+					stream,
+					mode = self.mode,
+					compression = self.compression,
+					allowZip64 = self.allowZip64,) as zf:
 
 				for path in self.paths:
-					if not self.arcname in path:
+					if self.arcname not in path:
 
 						# arcname will be default path
 						path[self.arcname] = path[self.filesystem]
@@ -699,7 +684,7 @@ except ImportError:
 
 class ZIP_Manager:
 	def __init__(self) -> None:
-		self.zip_temp_dir = tempfile.gettempdir() + '/zip_temp/'
+		self.zip_temp_dir = f'{tempfile.gettempdir()}/zip_temp/'
 		self.zip_ids = Custom_dict()
 		self.zip_path_ids = Custom_dict()
 		self.zip_in_progress = Custom_dict()
@@ -762,8 +747,9 @@ class ZIP_Manager:
 		def err(msg):
 			self.zip_in_progress.pop(zid, None)
 			self.assigend_zid.pop(path, None)
-			self.zip_id_status[zid] = "ERROR: " + msg
+			self.zip_id_status[zid] = f"ERROR: {msg}"
 			return False
+
 		if config.disabled_func["zip"]:
 			return err("ZIP FUNTION DISABLED")
 
@@ -932,10 +918,10 @@ def copy_byte_range(infile, outfile, start=None, stop=None, bufsize=16*1024):
 	if start is not None: infile.seek(start)
 	while 1:
 		to_read = min(bufsize, stop + 1 - infile.tell() if stop else bufsize)
-		buf = infile.read(to_read)
-		if not buf:
+		if buf := infile.read(to_read):
+			outfile.write(buf)
+		else:
 			break
-		outfile.write(buf)
 
 
 BYTE_RANGE_RE = re.compile(r'bytes=(\d+)-(\d+)?$')
@@ -948,14 +934,14 @@ def parse_byte_range(byte_range):
 
 	m = BYTE_RANGE_RE.match(byte_range)
 	if not m:
-		raise ValueError('Invalid byte range %s' % byte_range)
+		raise ValueError(f'Invalid byte range {byte_range}')
 
 	#first, last = [x and int(x) for x in m.groups()] #
 
 	first, last = map((lambda x: int(x) if x else None), m.groups())
 
 	if last and last < first:
-		raise ValueError('Invalid byte range %s' % byte_range)
+		raise ValueError(f'Invalid byte range {byte_range}')
 	return first, last
 
 #---------------------------x--------------------------------
@@ -1103,7 +1089,7 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
 		requestline = requestline.rstrip('\r\n')
 		self.requestline = requestline
 		words = requestline.split()
-		if len(words) == 0:
+		if not words:
 			return False
 
 		if len(words) >= 3:  # Enough to determine protocol version
@@ -1132,7 +1118,8 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
 			if version_number >= (2, 0):
 				self.send_error(
 					HTTPStatus.HTTP_VERSION_NOT_SUPPORTED,
-					"Invalid HTTP version (%s)" % base_version_number)
+					f"Invalid HTTP version ({base_version_number})",
+				)
 				return False
 			self.request_version = version
 
@@ -1232,7 +1219,7 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
 			if not self.parse_request():
 				# An error code has been sent, just exit
 				return
-			mname = 'do_' + self.command
+			mname = f'do_{self.command}'
 			if not hasattr(self, mname):
 				self.send_error(
 					HTTPStatus.NOT_IMPLEMENTED,
@@ -1325,10 +1312,7 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
 		"""Send the response header only."""
 		if self.request_version != 'HTTP/0.9':
 			if message is None:
-				if code in self.responses:
-					message = self.responses[code][0]
-				else:
-					message = ''
+				message = self.responses[code][0] if code in self.responses else ''
 			if not hasattr(self, '_headers_buffer'):
 				self._headers_buffer = []
 			self._headers_buffer.append(("%s %d %s\r\n" %
@@ -1417,7 +1401,7 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
 		try:
 			# create config.log_location if it doesn't exist
 			os.makedirs(config.log_location, exist_ok=True)
-			with open(config.log_location + 'log.txt','a+') as f:
+			with open(f'{config.log_location}log.txt', 'a+') as f:
 				f.write("\n\n" + "%s - - [%s] %s\n" %
 							(self.address_string(),
 							self.log_date_time_string(),
@@ -1427,7 +1411,7 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
 
 	def version_string(self):
 		"""Return the server software version string."""
-		return self.server_version + ' ' + self.sys_version
+		return f'{self.server_version} {self.sys_version}'
 
 	def date_time_string(self, timestamp=None):
 		"""Return the current date and time formatted for a message header."""
@@ -1439,9 +1423,14 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
 		"""Return the current time formatted for logging."""
 		now = time.time()
 		year, month, day, hh, mm, ss, x, y, z = time.localtime(now)
-		s = "%02d/%3s/%04d %02d:%02d:%02d" % (
-				day, self.monthname[month], year, hh, mm, ss)
-		return s
+		return "%02d/%3s/%04d %02d:%02d:%02d" % (
+			day,
+			self.monthname[month],
+			year,
+			hh,
+			mm,
+			ss,
+		)
 
 	weekdayname = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -1509,8 +1498,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
 	def do_GET(self):
 		"""Serve a GET request."""
-		f = self.send_head()
-		if f:
+		if f := self.send_head():
 			try:
 				self.copyfile(f, self.wfile)
 			except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError) as e:
@@ -1520,17 +1508,12 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
 	def do_HEAD(self):
 		"""Serve a HEAD request."""
-		f = self.send_head()
-		if f:
+		if f := self.send_head():
 			f.close()
 
 	def do_POST(self):
 		"""Serve a POST request."""
 		self.range = None # bug patch
-		DO_NOT_JSON = False # wont convert r, info to json
-
-
-
 		try:
 			post_type, r, info, script = self.deal_post_data()
 		except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError) as e:
@@ -1539,17 +1522,14 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 		if post_type=='get-json':
 			return self.list_directory_json()
 
-		if post_type== "upload":
-			DO_NOT_JSON = True
-
-
+		DO_NOT_JSON = post_type == "upload"
 		print((r, post_type, "by: ", self.client_address))
 
-		if r==True:
-			head = "Success"
-		elif r==False:
+		if r == False:
 			head = "Failed"
 
+		elif r == True:
+			head = "Success"
 		else:
 			head = r
 

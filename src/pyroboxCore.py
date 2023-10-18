@@ -132,10 +132,8 @@ class Config:
 
 	def clear_temp(self):
 		for i in self.temp_file:
-			try:
+			with contextlib.suppress(OSError):
 				os.remove(i)
-			except OSError:
-				pass
 
 	def get_os(self):
 		from platform import system as platform_system
@@ -181,9 +179,7 @@ class Config:
 								default='==SUPPRESS==',
 								help=('show this help message and exit'))
 
-		args = parser.parse_known_args()[0]
-
-		return args
+		return parser.parse_known_args()[0]
 
 
 class Tools:
@@ -210,9 +206,7 @@ class Tools:
 		term_col = shutil.get_terminal_size()[0]
 
 		s = self.styles[style] if style in self.styles else style
-		tt = ""
-		for i in text.split('\n'):
-			tt += i.center(term_col) + '\n'
+		tt = "".join(i.center(term_col) + '\n' for i in text.split('\n'))
 		return (f"\n\n{s*term_col}\n{tt}{s*term_col}\n\n")
 
 	@staticmethod
@@ -221,7 +215,7 @@ class Tools:
 		length : length of string
 		"""
 		letters = string.ascii_lowercase
-		return ''.join(random.choice(letters) for i in range(length))
+		return ''.join(random.choice(letters) for _ in range(length))
 
 
 tools = Tools()
@@ -234,7 +228,7 @@ class Callable_dict(dict):
 		self.__dict__ = self
 
 	def __call__(self, *key):
-		return all([i in self for i in key])
+		return all(i in self for i in key)
 
 
 
@@ -337,10 +331,10 @@ def copy_byte_range(infile, outfile, start=None, stop=None, bufsize=16*1024):
 		infile.seek(start)
 	while 1:
 		to_read = min(bufsize, stop + 1 - infile.tell() if stop else bufsize)
-		buf = infile.read(to_read)
-		if not buf:
+		if buf := infile.read(to_read):
+			outfile.write(buf)
+		else:
 			break
-		outfile.write(buf)
 
 
 BYTE_RANGE_RE = re.compile(r'bytes=(\d+)-(\d+)?$')
@@ -475,7 +469,7 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
 		requestline = requestline.rstrip('\r\n')
 		self.requestline = requestline
 		words = requestline.split()
-		if len(words) == 0:
+		if not words:
 			return False
 
 		if len(words) >= 3:  # Enough to determine protocol version
@@ -504,7 +498,8 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
 			if version_number >= (2, 0):
 				self.send_error(
 					HTTPStatus.HTTP_VERSION_NOT_SUPPORTED,
-					"Invalid HTTP version (%s)" % base_version_number)
+					f"Invalid HTTP version ({base_version_number})",
+				)
 				return False
 			self.request_version = version
 
@@ -555,14 +550,14 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
 		elif (conntype.lower() == 'keep-alive' and
 			  self.protocol_version >= "HTTP/1.1"):
 			self.close_connection = False
-		
+
 		# Load cookies from request
 		# Uses standard SimpleCookie
 		# doc: https://docs.python.org/3/library/http.cookies.html
 		self.cookie = SimpleCookie()
 		self.cookie.load(self.headers.get('Cookie', ""))
 		# print(tools.text_box("Cookie: ", self.cookie))
-		
+
 		# Examine the headers and look for an Expect directive
 		expect = self.headers.get('Expect', "")
 		if (expect.lower() == "100-continue" and
@@ -612,7 +607,7 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
 			if not self.parse_request():
 				# An error code has been sent, just exit
 				return
-			mname = 'do_' + self.command
+			mname = f'do_{self.command}'
 			if not hasattr(self, mname):
 				self.send_error(
 					HTTPStatus.NOT_IMPLEMENTED,
@@ -654,7 +649,7 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
 			logger.info('-'*w + f' {self.req_hash} ' + '-'*w + '\n' +
 						'#'*_w
 						)
-			
+
 			# actually send the response if not already done.
 			self.wfile.flush()
 
@@ -748,8 +743,8 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
 		"""
 		if self.response_code_sent:
 			return
-		
-		if not code//100 ==1: # 1xx - Informational (allowes multiple responses)
+
+		if code // 100 != 1: # 1xx - Informational (allowes multiple responses)
 			self.response_code_sent = True
 
 		self.log_request(code)
@@ -761,10 +756,7 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
 		"""Send the response header only."""
 		if self.request_version != 'HTTP/0.9':
 			if message is None:
-				if code in self.responses:
-					message = self.responses[code][0]
-				else:
-					message = ''
+				message = self.responses[code][0] if code in self.responses else ''
 			if not hasattr(self, '_headers_buffer'):
 				self._headers_buffer = []
 			self._headers_buffer.append(("%s %d %s\r\n" %
@@ -851,7 +843,7 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
 
 	def _log_writer(self, message):
 		os.makedirs(config.log_location, exist_ok=True)
-		with open(config.log_location + 'log.txt', 'a+') as f:
+		with open(f'{config.log_location}log.txt', 'a+') as f:
 			f.write(
 				(f"#{self.req_hash} by [{self.address_string()}] at [{self.log_date_time_string()}]|=> {message}\n"))
 
@@ -892,7 +884,7 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
 
 	def version_string(self):
 		"""Return the server software version string."""
-		return self.server_version + ' ' + self.sys_version
+		return f'{self.server_version} {self.sys_version}'
 
 	def date_time_string(self, timestamp=None):
 		"""Return the current date and time formatted for a message header."""
@@ -904,9 +896,14 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
 		"""Return the current time formatted for logging."""
 		now = time.time()
 		year, month, day, hh, mm, ss, x, y, z = time.localtime(now)
-		s = "%02d/%3s/%04d %02d:%02d:%02d" % (
-			day, self.monthname[month], year, hh, mm, ss)
-		return s
+		return "%02d/%3s/%04d %02d:%02d:%02d" % (
+			day,
+			self.monthname[month],
+			year,
+			hh,
+			mm,
+			ss,
+		)
 
 	weekdayname = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -1059,8 +1056,8 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
 
 		'''
-		if url_regex and not re.search("^"+url_regex+'$', self.url_path):
-				return False
+		if url_regex and not re.search(f"^{url_regex}$", self.url_path):
+			return False
 		if url and url != self.url_path:
 			return False
 
@@ -1076,10 +1073,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 				if self.query[k] != v:
 					return False
 
-		if fragent and self.fragment != fragent:
-			return False
-
-		return True
+		return not fragent or self.fragment == fragent
 
 	def do_HEAD(self):
 		"""Serve a HEAD request."""
@@ -1193,7 +1187,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
 		try:
 			ctype = self.guess_type(path)
-			
+
 			# make sure texts are sent as utf-8
 			if ctype.startswith("text/"):
 				ctype += "; charset=utf-8"
@@ -1254,17 +1248,19 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
 			else:
 				self.send_response(HTTPStatus.OK)
-				
+
 				self.send_header("Content-Length", str(file_len))
-				
+
 			if cache_control:
 				self.send_header("Cache-Control", cache_control)
 
 			self.send_header("Last-Modified",
 							 self.date_time_string(fs.st_mtime))
 			self.send_header("Content-Type", ctype)
-			self.send_header("Content-Disposition", is_attachment+' filename="%s"' %
-							 (os.path.basename(path) if filename is None else filename))
+			self.send_header(
+				"Content-Disposition",
+				f'{is_attachment} filename="{os.path.basename(path) if filename is None else filename}"',
+			)
 			self.end_headers()
 
 			return file
@@ -1437,10 +1433,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 		if ext in self.extensions_map:
 			return self.extensions_map[ext]
 		guess, _ = mimetypes.guess_type(path)
-		if guess:
-			return guess
-
-		return self.extensions_map['']  # return 'application/octet-stream'
+		return guess if guess else self.extensions_map['']
 
 
 class PostError(Exception):
@@ -1546,7 +1539,7 @@ class DealPostData:
 		* check if content size is within limit
 		* return True if within limit
 		"""
-		if not max_size < 0 or self.content_length <= max_size:
+		if max_size >= 0 or self.content_length <= max_size:
 			raise PostError(
 				f"Content size limit exceeded: {self.content_length} > {max_size}")
 
@@ -1600,11 +1593,11 @@ class DealPostData:
 			chunk = n % 1024
 			n -= chunk
 
-			_line = self.get(chunk_size=chunk)
-			if not _line:
-				break
-			line += _line
+			if _line := self.get(chunk_size=chunk):
+				line += _line
 
+			else:
+				break
 		return line
 
 	def get_json(self, max_size=-1):
@@ -1613,7 +1606,7 @@ class DealPostData:
 		* return parsed json data
 		"""
 
-		if not self.content_type == "application/json":
+		if self.content_type != "application/json":
 			raise PostError("Content-Type is not application/json")
 
 		line = self.get_content(max_size=max_size)
@@ -1683,7 +1676,7 @@ class FormData:
 			raise PostError("Not multipart")
 
 		line = self.dpd.get()
-		if not self.boundary in line:
+		if self.boundary not in line:
 			self.req.log_error(f"Content boundary missing on line {self.dpd.num}\n", [
 							   line, self.boundary])
 
@@ -1713,12 +1706,10 @@ class FormData:
 		line = self.get_a_dline(line)
 
 		cd = ContentDisposition(line)
-		fn = cd.get('filename')
-
-		if not fn:
+		if fn := cd.get('filename'):
+			return fn
+		else:
 			raise PostError("Can't find out file name...")
-
-		return fn
 
 	def get_field_name(self, line=None):
 		"""
@@ -1855,13 +1846,8 @@ class FormData:
 		"""
 		Generator that yields the parts of the form data.
 		"""
-		if self.is_multipart:
-			g = self.get_multipart_iter
-		else:
-			g = self.get_urlencoded_iter
-
-		for part in g(max_size):
-			yield part
+		g = self.get_multipart_iter if self.is_multipart else self.get_urlencoded_iter
+		yield from g(max_size)
 
 
 def _get_best_family(*address):
@@ -1883,13 +1869,11 @@ def get_ip(bind=None):
 		s.connect(('10.255.255.255', 1))
 		IP = s.getsockname()[0]
 	except:
-		try:
+		with contextlib.suppress(socket.herror, OSError):
 			if config.OS == "Android":
 				IP = s.connect(("192.168.43.1",  1))
 				IP = s.getsockname()[0]
 				# Assigning this variable because Android does't return actual IP when hosting a hotspot
-		except (socket.herror, OSError):
-			pass
 	finally:
 		s.close()
 	return IP

@@ -107,7 +107,7 @@ def _get_tree_size(path, limit=None, return_list= False, full_dir=True, both=Fal
 						raise LimitExceed
 				except OSError:
 					continue
-				
+
 				if must_read:
 					try:
 						with open(entry.path, "rb") as f:
@@ -122,8 +122,7 @@ def _get_tree_size(path, limit=None, return_list= False, full_dir=True, both=Fal
 
 		dir.close()
 
-	if return_list: return total, r
-	return total
+	return (total, r) if return_list else total
 
 def get_dir_size(start_path = '.', limit=None, return_list= False, full_dir=True, both=False, must_read=False):
 	"""
@@ -152,15 +151,12 @@ def get_dir_size(start_path = '.', limit=None, return_list= False, full_dir=True
 
 			total_size += stat.st_size
 			if limit!=None and total_size>limit:
-				if return_list: return -1, False
-				return -1
-
+				return (-1, False) if return_list else -1
 			if return_list:
 				if both: r.append((fp, fp.replace(start_path, "", 1)))
 				else:    r.append(fp if full_dir else fp.replace(start_path, "", 1))
 
-	if return_list: return total_size, r
-	return total_size
+	return (total_size, r) if return_list else total_size
 
 def _get_tree_count_n_size(path):
 	total = 0
@@ -206,10 +202,8 @@ def get_tree_count_n_size(start_path):
 			if os.path.islink(fp):
 				continue
 
-			stat = get_stat(fp)
-			if not stat: continue
-
-			size += stat.st_size
+			if stat := get_stat(fp):
+				size += stat.st_size
 
 	return count, size
 
@@ -220,13 +214,13 @@ if __name__ == '__main__':
 	r1 = 'nothing'
 
 	t1 = time.time()
-	for i in range(10):
+	for _ in range(10):
 		r1 = get_dir_size(path, return_list= True)
 	t2 = time.time()
 	print('get_dir_size + fList', t2-t1, len(r1[1]), r1[0], sep='\t')
 
 	t1 = time.time()
-	for i in range(10):
+	for _ in range(10):
 		r1 = _get_tree_size(path, return_list= True)
 	t2 = time.time()
 	print('_get_tree_size + fList', t2-t1, len(r1[1]), r1[0], sep='\t')
@@ -236,13 +230,13 @@ if __name__ == '__main__':
 
 
 	t1 = time.time()
-	for i in range(10):
+	for _ in range(10):
 		r1 = _get_tree_count_n_size(path)
 	t2 = time.time()
 	print('_get_tree_count_n_size', t2-t1, r1[0], r1[1], sep='\t')
 
 	t1 = time.time()
-	for i in range(10):
+	for _ in range(10):
 		r1 = get_tree_count_n_size(path)
 	t2 = time.time()
 	print('get_tree_count_n_size', t2-t1, r1[0], r1[1], sep='\t')
@@ -250,15 +244,15 @@ if __name__ == '__main__':
 	print()
 
 
-	
+
 	t1 = time.time()
-	for i in range(10):
+	for _ in range(10):
 		r1 = get_file_count(path)
 	t2 = time.time()
 	print('get_file_count    ', t2-t1, r1, sep='\t')
 
 	t1 = time.time()
-	for i in range(10):
+	for _ in range(10):
 		r1 = _get_tree_count(path)
 	t2 = time.time()
 	print('_get_tree_count    ', t2-t1, r1, sep='\t')

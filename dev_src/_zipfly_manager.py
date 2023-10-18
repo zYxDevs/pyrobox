@@ -67,7 +67,7 @@ class ZipFly:
 
 
 
-		self.comment = 'Written using Zipfly v' + zf__version__
+		self.comment = f'Written using Zipfly v{zf__version__}'
 		self.mode = mode
 		self.paths = paths
 		self.filesystem = 'fs'
@@ -86,13 +86,13 @@ class ZipFly:
 		stream = ZipflyStream()
 
 		with zipfile.ZipFile(
-			stream,
-			mode = self.mode,
-			compression = self.compression,
-			allowZip64 = self.allowZip64,) as zf:
+				stream,
+				mode = self.mode,
+				compression = self.compression,
+				allowZip64 = self.allowZip64,) as zf:
 
 			for path in self.paths:
-				if not self.arcname in path:
+				if self.arcname not in path:
 
 					# arcname will be default path
 					path[self.arcname] = path[self.filesystem]
@@ -133,7 +133,7 @@ class Callable_dict(dict):
 		self.__dict__ = self
 
 	def __call__(self, *key):
-		return all([i in self for i in key])
+		return all(i in self for i in key)
 
 
 class FixSizeOrderedDict(OrderedDict, Callable_dict):
@@ -153,7 +153,7 @@ class ZIP_Manager:
 		self.size_limit = size_limit
 
 
-		self.zip_temp_dir = tempfile.gettempdir() + '/zip_temp/'
+		self.zip_temp_dir = f'{tempfile.gettempdir()}/zip_temp/'
 		self.zip_ids = Callable_dict()
 		self.zip_path_ids = Callable_dict()
 		self.zip_in_progress = Callable_dict()
@@ -242,8 +242,9 @@ class ZIP_Manager:
 		def err(msg):
 			self.zip_in_progress.pop(zid, None)
 			self.assigend_zid.pop(path, None)
-			self.zip_id_status[zid] = "ERROR: " + msg
+			self.zip_id_status[zid] = f"ERROR: {msg}"
 			return False
+
 		if not self.zip_allowed:
 			return err("ZIP FUNTION DISABLED")
 

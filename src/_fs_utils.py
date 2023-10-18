@@ -48,18 +48,17 @@ def check_access(path):
 	"""
 	if not os.path.exists(path):
 		return False
-	
-	if os.path.isfile(path):
-		try:
-			with open(path, "rb") as f:
-				f.read(1)
 
-				return True
-		except Exception:
-			return False
-	else:
+	if not os.path.isfile(path):
 		# if folder, check if it's stat is accessible
 		return bool(get_stat(path))
+	try:
+		with open(path, "rb") as f:
+			f.read(1)
+
+			return True
+	except Exception:
+		return False
 
 
 
@@ -105,65 +104,15 @@ def get_tree(path, include_dir=True):
 	include_dir (bool): if True returns full path, else relative path
 	"""
 	home = path
-	tree = []
-
-	# Q = Queue()
-	# Q.put(path)
-	# while not Q.empty():
-	# 	path = Q.get()
-
-	# 	try:
-	# 		dir = os.scandir(path)
-	# 	except OSError:
-	# 		continue
-	# 	for entry in dir:
-	# 		try:
-	# 			is_dir = entry.is_dir(follow_symlinks=False)
-	# 		except OSError as error:
-	# 			continue
-	# 		if is_dir:
-	# 			Q.put(entry.path)
-
-	# 		if include_dir or not is_dir:
-	# 			tree.append([entry.path, entry.path.replace(home, "", 1)])
-
-	# 	dir.close()
-
-	for entry in walk_dir(path, yield_dir=include_dir):
-		tree.append([entry.path, entry.path.replace(home, "", 1)])
-
-	return tree
+	return [
+		[entry.home, entry.home.replace(home, "", 1)]
+		for entry in walk_dir(home, yield_dir=include_dir)
+	]
 
 
 
 def _get_tree_count(path):
-	count = 0
-
-	# Q = Queue()
-	# Q.put(path)
-	# while not Q.empty():
-	# 	path = Q.get()
-
-	# 	try:
-	# 		dir = os.scandir(path)
-	# 	except OSError:
-	# 		continue
-	# 	for entry in dir:
-	# 		try:
-	# 			is_dir = entry.is_dir(follow_symlinks=False)
-	# 		except OSError as error:
-	# 			continue
-	# 		if is_dir:
-	# 			Q.put(entry.path)
-	# 		else:
-	# 			count += 1
-
-	# 	dir.close()
-
-	for entry in walk_dir(path):
-		count += 1
-
-	return count
+	return sum(1 for _ in walk_dir(path))
 
 
 def get_file_count(path):
@@ -285,10 +234,11 @@ def get_tree_count_n_size(start_path):
 def fmbytes(B=0, path=''):
 	'Return the given bytes as a file manager friendly KB, MB, GB, or TB string'
 	if path:
-		stat = get_stat(path)
-		if not stat: return "Unknown"
-		B = stat.st_size
+		if stat := get_stat(path):
+			B = stat.st_size
 
+		else:
+			return "Unknown"
 	B = B
 	KB = 1024
 	MB = (KB ** 2) # 1,048,576
@@ -304,10 +254,7 @@ def fmbytes(B=0, path=''):
 		return '%.2f MB  '%(B/MB)
 	if B/KB>1:
 		return '%.2f KB  '%(B/KB)
-	if B>1:
-		return '%i bytes'%B
-
-	return "%i byte"%B
+	return '%i bytes'%B if B>1 else "%i byte"%B
 
 
 def humanbytes(B):
@@ -357,11 +304,8 @@ def get_titles(path, file=False):
 
 	paths = path.split('/')
 	if file:
-		return 'Viewing ' + paths[-1]
-	if paths[-2]=='':
-		return 'Viewing &#127968; HOME'
-	else:
-		return 'Viewing ' + paths[-2]
+		return f'Viewing {paths[-1]}'
+	return 'Viewing &#127968; HOME' if paths[-2]=='' else f'Viewing {paths[-2]}'
 
 
 
@@ -380,7 +324,7 @@ def dir_navigator(path):
 		names.append(dir)
 
 	for i in range(len(names)):
-		tag = "<a class='dir_turns' href='" + urls[i] + "'>" + names[i] + "</a>"
+		tag = f"<a class='dir_turns' href='{urls[i]}'>{names[i]}</a>"
 		r.append(tag)
 
 	return '<span class="dir_arrow">&#10151;</span>'.join(r)
