@@ -33,17 +33,24 @@ def custom_sort(item):
 		parts = item.split()
 		for n, part in enumerate(parts):
 			part = part.lower()
-			try:
-				parts[n] = float(part)
-			except ValueError:
-				part = part.replace(".", " . ")
-				parts_ = part.split()
-				for n_, part_ in enumerate(parts_):
-					try:
-						parts_[n_] = float(part_)
-					except ValueError:
-						pass
-				parts[n] = parts_
+			# If token looks like a dotted version (e.g. 1.2.3), keep as version tuple
+			if "." in part and all(p.isdigit() for p in part.split(".")):
+				parts[n] = tuple(int(p) for p in part.split("."))
+			else:
+				try:
+					f = float(part)
+					# prefer ints where possible
+					parts[n] = int(f) if f.is_integer() else f
+				except ValueError:
+					part = part.replace(".", " . ")
+					parts_ = part.split()
+					for n_, part_ in enumerate(parts_):
+						try:
+							f2 = float(part_)
+							parts_[n_] = int(f2) if f2.is_integer() else f2
+						except ValueError:
+							pass
+					parts[n] = parts_
 
 		for part in parts:
 			if isinstance(part, list):
@@ -51,7 +58,22 @@ def custom_sort(item):
 			else:
 				out_parts.append(part)
 
-		out = out_parts
+		# Normalize numeric elements to tuples so comparisons never mix types.
+		# Numeric/version parts become (0, tuple_of_numbers), text become (1, string)
+		normalized = []
+		for p in out_parts:
+			if isinstance(p, tuple):
+				# already a version tuple (of ints)
+				normalized.append((0, tuple(p)))
+			elif isinstance(p, (int, float)):
+				# single numeric -> make a one-element numeric tuple
+				if isinstance(p, float) and p.is_integer():
+					p = int(p)
+				normalized.append((0, (p,)))
+			else:
+				normalized.append((1, p))
+
+		out = normalized
 	else:
 		out = [item]
 

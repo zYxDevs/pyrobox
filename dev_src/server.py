@@ -230,7 +230,7 @@ def Authorize_user(self: SH):
 	return user, cookie
 
 
-@SH.on_req('HEAD', hasQ="type")
+@SH.on_req('GET', hasQ="type")
 def get_page_type(self: SH, *args, **kwargs):
 	"""Return type of the page"""
 	user, cookie = Authorize_user(self)
@@ -1339,7 +1339,7 @@ def get_folder_data(self: SH, *args, **kwargs):
 		return self.send_json(data, cookie=cookie)
 
 
-@SH.on_req('HEAD')
+@SH.on_req('GET')
 def default_get(self: SH, filename=None, *args, **kwargs):
 	"""Serve a GET request."""
 	user, cookie = Authorize_user(self)
