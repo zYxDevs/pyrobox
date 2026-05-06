@@ -290,10 +290,11 @@ a {
 	z-index: 23;
 	padding: 20px;
 	box-sizing: border-box;
-	max-height: min(600px, 80%);
-	height: max-content;
-	min-height: 300px;
-	overflow: auto;
+	max-height: min(90vh, 95vh);
+	height: auto;
+	min-height: auto;
+	overflow-y: auto;
+	overflow-x: hidden;
 	border-radius: 6px;
 	text-align: center;
 	overflow-wrap: anywhere;
@@ -407,75 +408,349 @@ ul {
 	margin: 0;
 }
 
-.upload-pass {
-	background-color: #000;
-	padding: 5px;
-	border-radius: 4px;
-	font: 1.5em sans-serif;
-}
-
-.upload-pass-box {
-	/* make text field larger */
-	font-size: 1.5em;
-	border: #aa00ff solid 2px;
-	;
-	border-radius: 4px;
-	background-color: #0f0f0f;
-	max-width: 90%;
-}
-
-
-.upload-box {
+.upload-pass-container {
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	gap: 15px;
+	margin-bottom: 25px;
+	width: 100%;
+}
+
+.upload-pass-label {
+	font-weight: 600;
+	color: #ccc;
+	display: flex;
+	align-items: center;
+	white-space: nowrap;
+}
+
+.upload-pass-wrapper {
+	position: relative;
+	display: flex;
+	align-items: center;
+	max-width: 250px;
+	width: 100%;
+}
+
+.upload-pass-box {
+	background: rgba(0, 0, 0, 0.2);
+	border: 1px solid #444;
+	padding: 10px 40px 10px 15px;
+	border-radius: 8px;
+	color: #fff;
+	width: 100%;
+	outline: none;
+	transition: all 0.2s ease;
+	font-size: 14px;
+}
+
+.upload-pass-box:focus {
+	border-color: #00b3ff;
+	box-shadow: 0 0 0 2px rgba(0, 179, 255, 0.2);
+}
+
+.upload-pass-eye {
+	position: absolute;
+	right: 10px;
+	background: none;
+	border: none;
+	color: #888;
+	font-size: medium;
+	cursor: pointer;
+	padding: 5px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: color 0.2s;
+}
+
+.upload-pass-eye:hover {
+	color: #00b3ff;
+}
+
+.upload-box-outer {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
 }
 
 .drag-area {
-	border: 2px dashed #fff;
-	height: 300px;
-	width: 95%;
-	border-radius: 5px;
+	border: 2px dashed #444;
+	min-height: 450px;
+	width: 100%;
+	border-radius: 15px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	flex-direction: column;
+	background: rgba(255, 255, 255, 0.03);
+	backdrop-filter: blur(5px);
+	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+	cursor: pointer;
+	padding: 30px 20px;
+}
+
+.drag-area:hover {
+	border-color: #555;
+	background: rgba(255, 255, 255, 0.05);
 }
 
 .drag-area.active {
-	border: 2px solid #fff;
+	border-color: #00b3ff;
+	background: rgba(0, 179, 255, 0.05);
+	transform: scale(1.01);
 }
 
-.drag-area .drag-icon {
-	font-size: 100px;
-	color: #fff;
+.drag-icon-wrapper {
+	margin-bottom: 15px;
+	transition: transform 0.3s ease;
+}
+
+.drag-area:hover .drag-icon-wrapper {
+	transform: translateY(-5px);
+}
+
+.drag-icon {
+	font-size: 55px;
+	filter: drop-shadow(0 0 15px rgba(0, 179, 255, 0.4));
 }
 
 .drag-area header {
-	font-size: 25px;
-	font-weight: 500;
+	font-size: 20px;
+	font-weight: 700;
 	color: #fff;
+	margin: 10px 0 5px 0;
+	text-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
 
-.drag-area span {
-	font-size: 20px;
-	font-weight: 500;
-	color: #fff;
-	margin: 10px 0 15px 0;
+.drag-area p {
+	font-size: 14px;
+	color: #ccc;
+	margin-bottom: 0;
+	letter-spacing: 0.3px;
+}
+
+.upload-button-container {
+	display: flex;
+	gap: 10px;
+	margin-top: 5px;
 }
 
 .drag-browse,
 #submit-btn {
-	padding: 10px 25px;
-	font-size: 20px;
-	font-weight: 500;
+	padding: 10px 24px;
+	font-size: 15px;
+	font-weight: 600;
 	outline: none;
-	background: #fff;
-	color: #5256ad;
-	border-radius: 5px;
-	border: solid 2px #00ccff;
+	background: rgba(255, 255, 255, 0.1);
+	color: #fff;
+	border-radius: 8px;
+	border: 1px solid rgba(255, 255, 255, 0.2);
 	cursor: pointer;
+	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	backdrop-filter: blur(5px);
 }
+
+.drag-browse:hover,
+#submit-btn:hover {
+	background: rgba(255, 255, 255, 0.2);
+	border-color: #00b3ff;
+	box-shadow: 0 0 15px rgba(0, 179, 255, 0.3);
+}
+
+.upload-button {
+	margin-top: 15px;
+	padding: 12px 30px;
+	font-size: 15px;
+	font-weight: 700;
+	background: linear-gradient(135deg, #00b3ff 0%, #0081ff 100%);
+	color: #fff;
+	border: none;
+	border-radius: 8px;
+	box-shadow: 0 4px 15px rgba(0, 129, 255, 0.3);
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	cursor: pointer;
+	transition: all 0.3s ease;
+}
+
+.upload-button:hover {
+	box-shadow: 0 6px 20px rgba(0, 129, 255, 0.4);
+	filter: brightness(1.1);
+}
+
+.upload-pop-status {
+	color: #00ccff;
+	font-weight: bold;
+}
+
+/* Mobile responsive upload screen */
+@media screen and (max-width: 768px) {
+	.drag-area {
+		min-height: 200px;
+		padding: 20px 15px;
+	}
+	
+	.drag-icon {
+		font-size: 40px;
+	}
+	
+	.drag-area header {
+		font-size: 18px;
+		margin: 8px 0 4px 0;
+	}
+	
+	.drag-area span {
+		font-size: 13px;
+	}
+	
+	.upload-pass-container {
+		flex-direction: column;
+		gap: 10px;
+		margin-bottom: 15px;
+	}
+	
+	.upload-pass-label {
+		align-self: flex-start;
+	}
+	
+	.upload-pass-wrapper {
+		max-width: none;
+		width: 100%;
+	}
+}
+
+@media screen and (max-width: 480px) {
+	.drag-area {
+		min-height: 150px;
+		padding: 15px 12px;
+	}
+	
+	.drag-icon {
+		font-size: 35px;
+	}
+	
+	.drag-area header {
+		font-size: 16px;
+		margin: 6px 0 3px 0;
+	}
+	
+	.upload-button-container {
+		margin-top: 3px;
+	}
+	
+	.drag-browse,
+	.upload-button {
+		padding: 8px 16px;
+		font-size: 14px;
+	}
+}
+
+@media screen and (max-height: 900px) {
+	.drag-area {
+		min-height: 300px;
+	}
+}
+
+@media screen and (max-height: 700px) {
+	.drag-area {
+		min-height: 200px;
+	}
+	
+	.drag-file-list {
+		max-height: 120px;
+	}
+}
+
+@media screen and (max-height: 600px) {
+	.drag-area {
+		min-height: 150px;
+		padding: 20px 15px;
+	}
+	
+	.drag-file-list {
+		max-height: 80px;
+	}
+}
+
+.drag-file-list {
+	width: 100%;
+	max-height: 250px;
+	overflow-y: auto;
+	overflow-x: hidden;
+	margin-top: 15px;
+	background: #111;
+	border: 1px solid #333;
+	border-radius: 8px;
+	padding: 5px;
+	box-sizing: border-box;
+}
+
+.upload-file-item {
+	display: flex;
+	align-items: center;
+	padding: 8px 12px;
+	margin-bottom: 4px;
+	background: #222;
+	border-radius: 4px;
+	border: 1px solid #333;
+	box-sizing: border-box;
+	width: 100%;
+	min-width: 0;
+}
+
+.upload-file-item:last-child {
+	margin-bottom: 0;
+}
+
+.ufname {
+	flex: 1;
+	text-align: left;
+	font-size: 14px;
+	color: #e8e6e3;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	padding-right: 10px;
+}
+
+.ufsize {
+	font-size: 11px;
+	color: #777;
+	margin-right: 15px;
+	font-family: monospace;
+}
+
+.ufdel {
+	cursor: pointer;
+	color: #666;
+	font-size: 18px;
+	background: none;
+	border: none;
+	padding: 4px;
+	line-height: 1;
+	transition: color 0.1s, transform 0.1s;
+}
+
+.ufdel:hover {
+	color: #ff4d4d;
+	transform: scale(1.2);
+}
+
+.has-selected-files {
+	font-size: 14px;
+	font-weight: 600;
+	margin: 20px 0 10px 0;
+	color: #aaa;
+	text-transform: uppercase;
+	letter-spacing: 1px;
+}
+
 
 .toast-box {
 	z-index: 99;
@@ -765,6 +1040,11 @@ ul {
 
 
 .open-sidebar-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	white-space: nowrap;
+	flex-shrink: 0;
 	background-color: #2e2e2e;
 	font-size: 20px;
 	cursor: pointer;
@@ -1360,64 +1640,6 @@ input#folder-name {
 	padding: 12px;
 }
 
-
-
-
-
-.drag-area {
-    position: relative;
-    transition: all 0.3s;
-}
-
-.drag-area.active {
-    border-color: #4CAF50;
-    background-color: rgba(76, 175, 80, 0.1);
-}
-
-.upload-button-container {
-    margin-top: 15px;
-    text-align: center;
-}
-
-.drag-browse {
-    padding: 10px 20px;
-    background: #4CAF50;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 16px;
-    transition: all 0.3s;
-}
-
-.drag-browse:hover {
-    background: #45a049;
-    transform: translateY(-2px);
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-}
-
-.drag-browse:active {
-    transform: translateY(0);
-}
-
-.tooltip {
-    position: absolute;
-    bottom: -25px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #333;
-    color: white;
-    padding: 5px 10px;
-    border-radius: 4px;
-    font-size: 12px;
-    opacity: 0;
-    transition: opacity 0.3s;
-    pointer-events: none;
-}
-
-.upload-button-container:hover .tooltip {
-    opacity: 1;
-}
 
 /* ================================================================
    CODE EDITOR STYLES - OPTIMIZED & LIGHTWEIGHT

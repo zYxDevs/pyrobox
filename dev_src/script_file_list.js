@@ -25,7 +25,11 @@ class UploadManager {
 		
 		file_list.ondragover = async (event) => {
 			event.preventDefault();
-			if (this.drag_pop_open) return;
+			
+			// Check if files are being dragged (not links or other content)
+			const hasFiles = Array.from(event.dataTransfer.items || []).some(item => item.kind === 'file');
+			
+			if (!hasFiles || this.drag_pop_open) return;
 			
 			this.drag_pop_open = true;
 			const form = await this.new();
@@ -73,8 +77,8 @@ class UploadManager {
 		up_files.hidden = true;
 		center.appendChild(up_files);
 		
-		center.appendChild(createElement("br"));
-		center.appendChild(createElement("br"));
+		// center.appendChild(createElement("br"));
+		// center.appendChild(createElement("br"));
 		center.appendChild(this.createDragDropArea(up_files));
 		
 		form.appendChild(center);
@@ -93,42 +97,75 @@ class UploadManager {
 	}
 
 	createPasswordInput() {
-		const container = createElement("span");
-		container.className = "upload-pass";
+		const container = createElement("div");
+		container.className = "upload-pass-container";
 		
-		const label = document.createTextNode("Password:  ");
+		const label = createElement("span");
+		label.className = "upload-pass-label";
+		const lockIcon = this.createIconElement("🔐", "", "fa fa-solid fa-lock");
+		lockIcon.style.marginRight = "8px";
+		label.appendChild(lockIcon);
+		label.appendChild(document.createTextNode("Password:"));
 		container.appendChild(label);
+		
+		const wrapper = createElement("div");
+		wrapper.className = "upload-pass-wrapper";
 		
 		const input = createElement("input");
 		input.type = "password";
 		input.name = "password";
-		input.placeholder = "Password";
+		input.placeholder = "Optional";
 		input.className = "upload-pass-box";
-		container.appendChild(input);
+		wrapper.appendChild(input);
+		
+		const eyeBtn = createElement("button");
+		eyeBtn.type = "button";
+		eyeBtn.className = "upload-pass-eye";
+		const eyeIcon = this.createIconElement("👁", "", "fa fa-solid fa-eye");
+		eyeBtn.appendChild(eyeIcon);
+		
+		eyeBtn.onclick = (e) => {
+			e.preventDefault();
+			const isPass = input.type === "password";
+			input.type = isPass ? "text" : "password";
+			eyeBtn.innerHTML = "";
+			const newIcon = this.createIconElement(isPass ? "𓂀" : "👁", "", isPass ? "fa fa-solid fa-eye-slash" : "fa fa-solid fa-eye");
+			eyeBtn.appendChild(newIcon);
+		};
+		
+		wrapper.appendChild(eyeBtn);
+		container.appendChild(wrapper);
 		
 		return container;
 	}
 
 	createDragDropArea(fileInput) {
 		const uploader_box = createElement("div");
-		uploader_box.className = "upload-box";
+		uploader_box.className = "upload-box-outer";
 		
 		const dragArea = createElement("div");
 		dragArea.className = "drag-area";
 		dragArea.id = "drag-area";
+		dragArea.onclick = () => fileInput.click();
 		
-		dragArea.appendChild(this.createIconElement("⬆️", "drag-icon"));
+		const iconContainer = createElement("div");
+		iconContainer.className = "drag-icon-wrapper";
+		iconContainer.appendChild(this.createIconElement("☁️", "drag-icon", "fa fa-solid fa-cloud-arrow-up"));
+		dragArea.appendChild(iconContainer);
 		
-		const header = this.createHeaderElement("Drag & Drop Files or Folders");
+		const header = createElement("header");
+		header.innerText = "Click or Drag Files here";
 		dragArea.appendChild(header);
 		
-		dragArea.appendChild(this.createTextElement("OR"));
+		const subtitle = createElement("p");
+		subtitle.innerText = "Upload directories and multiple files";
+		dragArea.appendChild(subtitle);
 		
 		// Unified file/folder selection button
 		const buttonContainer = createElement("div");
 		buttonContainer.className = "upload-button-container";
 		
-		const browseButton = this.createBrowseButton(fileInput, "Browse Files/Folders");
+		const browseButton = this.createBrowseButton();
 		buttonContainer.appendChild(browseButton);
 		dragArea.appendChild(buttonContainer);
 		
@@ -153,12 +190,13 @@ class UploadManager {
 			if (e.target.files.length > 0) {
 				// console.log("Folder selected", e.target.files);
 				const files = await this.processFolderContents(e.target.files);
-				this.addFiles(files, fileInput);
+				this.addFiles(files, folderInput); // Fixed to use folderInput
 			}
 		});
 		
 		// Smart click handler that detects folder upload requests
 		browseButton.onclick = (e) => {
+			e.stopPropagation();
 			if (e.shiftKey || e.ctrlKey || e.metaKey) {
 				// Modified click = folder upload
 				folderInput.click();
@@ -174,50 +212,63 @@ class UploadManager {
 		return uploader_box;
 	}
 
-	createIconElement(icon, className) {
-		const element = createElement("div");
-		element.className = className;
-		element.innerText = icon;
-		return element;
-	}
-
-	createHeaderElement(text) {
-		const element = createElement("header");
-		element.innerText = text;
-		return element;
-	}
-
-	createTextElement(text) {
+	createIconElement(iconText, className, faClass) {
 		const element = createElement("span");
-		element.innerText = text;
+		element.className = (className ? className + " " : "") + (faClass ? `fa ${faClass}` : "");
+		element.innerText = iconText;
+		
+		if (typeof theme_controller !== 'undefined' && theme_controller.fa_ok) {
+			theme_controller.del_fa_alt(element);
+		}
 		return element;
 	}
 
-	createBrowseButton(fileInput) {
+	createBrowseButton() {
 		const button = createElement("button");
 		button.type = "button";
-		button.innerText = "Browse File";
 		button.className = "drag-browse";
-		button.onclick = () => fileInput.click();
+		
+		const icon = this.createIconElement("📁", "", "fa fa-solid fa-folder-open");
+		icon.style.marginRight = "8px";
+		button.appendChild(icon);
+		
+		const text = createElement("span");
+		text.innerText = "Select Files";
+		button.appendChild(text);
+
 		return button;
 	}
 
 	setupDragDropHandlers(dragArea, fileInput, header) {
 		dragArea.ondragover = (event) => {
 			event.preventDefault();
-			dragArea.classList.add("active");
-			header.innerText = "Release to Upload";
+			event.stopPropagation();
+			
+			// Check if any files are being dragged (not just links or other types)
+			const hasFiles = Array.from(event.dataTransfer.items || []).some(item => item.kind === 'file');
+			
+			if (hasFiles) {
+				dragArea.classList.add("active");
+				header.innerText = "Drop to add files";
+				event.dataTransfer.dropEffect = "copy";
+			} else {
+				dragArea.classList.remove("active");
+				event.dataTransfer.dropEffect = "none";
+			}
 		};
 
-		dragArea.ondragleave = () => {
+		dragArea.ondragleave = (event) => {
+			event.preventDefault();
+			event.stopPropagation();
 			dragArea.classList.remove("active");
-			header.innerText = "Drag & Drop Files or Folders";
+			header.innerText = "Click or Drag Files here";
 		};
 
 		dragArea.ondrop = async (event) => {
 			event.preventDefault();
+			event.stopPropagation();
 			dragArea.classList.remove("active");
-			header.innerText = "Drag & Drop Files or Folders";
+			header.innerText = "Click or Drag Files here";
 
 			const items = event.dataTransfer.items;
 			const files = [];
@@ -332,17 +383,20 @@ class UploadManager {
 	createSubmitSection() {
 		const fragment = document.createDocumentFragment();
 		
-		fragment.appendChild(createElement("br"));
-		
 		const center = createElement("center");
 		const submitButton = createElement("button");
 		submitButton.type = "submit";
-		submitButton.innerText = "➾ Upload";
 		submitButton.className = "drag-browse upload-button";
-		center.appendChild(submitButton);
 		
-		center.appendChild(createElement("br"));
-		center.appendChild(createElement("br"));
+		const icon = this.createIconElement("🚀", "", "fa fa-solid fa-rocket");
+		icon.style.marginRight = "10px";
+		submitButton.appendChild(icon);
+		
+		const text = createElement("span");
+		text.innerText = "Start Upload";
+		submitButton.appendChild(text);
+		
+		center.appendChild(submitButton);
 		
 		const statusLabel = createElement("span");
 		statusLabel.innerText = "Status: ";
@@ -352,6 +406,7 @@ class UploadManager {
 		statusText.innerText = "Waiting";
 		statusLabel.appendChild(statusText);
 		statusLabel.style.display = "none";
+		statusLabel.style.marginTop = "10px";
 		center.appendChild(statusLabel);
 		
 		fragment.appendChild(center);
@@ -404,15 +459,17 @@ class UploadManager {
 	}
 
 	removeDuplicates(files) {
-		let fileNames = new Set([...this.selected_files.files].map(f => f.name));
+		const getPath = f => f._relativePath || f.name;
+		let existingPaths = new Set([...this.selected_files.files].map(getPath));
 
 		for (let file of files) {
-			if (fileNames.has(file.name)) {
-				toaster.toast(this.truncateFileName(file.name) + " already selected", 1500);
+			let path = getPath(file);
+			if (existingPaths.has(path)) {
+				toaster.toast(this.truncateFileName(path) + " already selected", 1500);
 				continue;
 			}
 			this.selected_files.items.add(file);
-			fileNames.add(file.name);
+			existingPaths.add(path);
 		}
 	}
 
@@ -444,24 +501,35 @@ class UploadManager {
 	createFileItem(file, index, selected_files, fileDisplay, fileContainer) {
 		selected_files = selected_files || this.selected_files;
 
-		let item = createElement("table");
+		let item = createElement("div");
 		item.className = "upload-file-item";
 		
-		let nameCell = createElement("td");
+		let folderIconClass = file._relativePath && file._relativePath.includes('/') ? "fa fa-solid fa-folder" : "fa fa-solid fa-file";
+		let icon = this.createIconElement(file._relativePath && file._relativePath.includes('/') ? "📁" : "📄", "", folderIconClass);
+		icon.style.marginRight = "12px";
+		icon.style.fontSize = "18px";
+		item.appendChild(icon);
+
+		let nameCell = createElement("div");
 		nameCell.className = "ufname";
 		// Show the relative path if available
 		nameCell.innerText = file._relativePath || file.name;
 		item.appendChild(nameCell);
 		
-		let sizeCell = createElement("td");
+		let sizeCell = createElement("div");
 		sizeCell.className = "ufsize";
-		sizeCell.innerHTML = `<span>${fmbytes(file.size)}</span>`;
+		sizeCell.innerText = fmbytes(file.size);
 		item.appendChild(sizeCell);
 		
-		let removeCell = createElement("td");
-		removeCell.className = "ufremove";
-		removeCell.innerHTML = `<span>&times;</span>`;
-		removeCell.onclick = () => this.removeFileFromList(index, fileDisplay);
+		let removeCell = createElement("button");
+		removeCell.type = "button";
+		removeCell.className = "ufdel";
+		let delIcon = this.createIconElement("×", "", "fa fa-solid fa-xmark");
+		removeCell.appendChild(delIcon);
+		removeCell.onclick = (e) => {
+			e.stopPropagation();
+			this.removeFileFromList(index, fileDisplay);
+		};
 		item.appendChild(removeCell);
 		
 		return item;
@@ -497,8 +565,14 @@ class UploadManager {
 		const request = new XMLHttpRequest();
 		this.requests.set(index, request);
 		this.uploaders.set(index, e.target);
+		submitButton.innerHTML = "";
+		const icon = this.createIconElement("⏹️", "", "fa fa-solid fa-stop");
+		icon.style.marginRight = "8px";
+		submitButton.appendChild(icon);
+		const text = createElement("span");
+		text.innerText = "Cancel";
+		submitButton.appendChild(text);
 		
-		submitButton.innerText = "⏹️ Cancel";
 		popup_msg.close();
 		
 		var prog_id = `upload-${index}`;
