@@ -93,8 +93,10 @@ class Theme_Controller {
 			targets.forEach(e => {
 				const i = document.createElement("i");
 				i.className = e.className;
-				i.style = e.style.cssText;  // Ensure styles are retained
+				i.style.cssText = e.style.cssText; // Modern way to copy style
 				i.id = e.id;
+				// Remove child nodes (mostly the fallback emoji text)
+				tools.del_child(e)
 				if (e.parentNode) e.parentNode.replaceChild(i, e);
 			});
 		}
@@ -109,7 +111,7 @@ class Theme_Controller {
 		link.media = "print";  // Load in print mode first to avoid blocking render
 	
 		const cache_buster = Math.random();  // Force new font fetch (fixes Tofu issue)
-		link.href = "https://cdn.jsdelivr.net/gh/RaSan147/fabkp@2f5670e/css/all.min.css" + "?no_cache=" + cache_buster;
+		link.href = "https://fabkp.pages.dev/css/all.css" + "?no_cache=" + cache_buster;
 	
 		link.onload = function () {
 
