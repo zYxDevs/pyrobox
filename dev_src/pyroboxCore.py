@@ -35,7 +35,7 @@ import tempfile
 
 from typing import Type
 
-__version__ = "0.9.9"
+__version__ = "0.10.0"
 enc = "utf-8"
 DEV_MODE = True
 
@@ -759,6 +759,11 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
 			mname = 'do_HANDLE'
 			self.method = self.command.upper()
 
+			if not hasattr(self, mname):
+				self.send_error(
+					code=HTTPStatus.NOT_IMPLEMENTED,
+					message="Unsupported method (%r)" % self.command)
+				return
 			method = getattr(self, mname)
 
 			url_path, query, fragment = URL_MANAGER(self.path)
@@ -1520,7 +1525,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
 					if resp:
 						try:
-							print(method, self.method)
+							# print(method, self.method)
 							if self.method != "HEAD":
 								self.copyfile(resp, self.wfile)
 						except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError) as e:
@@ -1839,29 +1844,6 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 		"""
 		return string.replace(self.directory, "/", times)
 
-	def path_safety_check(self, paths:Union[str, List], *more_paths:Union[str, List]):
-		"""check if path is safe
-		paths: list of paths to check"""
-		if isinstance(paths, str):
-			paths = [paths]
-
-		if more_paths:
-			for path in more_paths:
-				if isinstance(path, str):
-					paths.append(path)
-				elif isinstance(path, (list, tuple, set)):
-					paths.extend(more_paths)
-				else:
-					raise TypeError(f"Invalid type {type(path)} for path")
-
-
-		for path in paths:
-			# if path.startswith(('../', '..\\', '/../', '\\..\\')) or '/../' in path or '\\..\\' in path or path.endswith(('/..', '\\..')):
-			
-				return False
-
-		return True
-
 	def path_safety_check(self, paths: Union[str, List], *more_paths: Union[str, List]):
 		"""Check if paths are safe and do not contain directory traversal attempts.
 		
@@ -1894,19 +1876,19 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
 		for path in paths:
 			if not path or not path.strip():  # False on empty paths
-				print(f"Empty path: {path}")
+				# logger.info(f"Empty path: {path}")
 				return False
 
 			path = path.strip().replace('\\', '/').strip('/')  # Remove leading/trailing whitespace
 
 			for part in path.split('/'):
 				if part in ('..', '.'):
-					print(f"Path traversal attempt: {path}")
+					# logger.info(f"Path traversal attempt: {path}")
 					return False
 
 			# Check for illegal characters
 			if BAD_FILENAME_CHARS.search(path):
-				print(f"Illegal characters in path: {path}")
+				# logger.info(f"Illegal characters in path: {path}")
 				return False
 
 			# Normalize the path to an absolute path
@@ -1914,9 +1896,9 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
 			# Check if the resolved path is inside the base directory
 			if not abs_path.startswith(base_dir):
-				print(f"Path escapes base directory: {path}")
-				print(f"Base directory: {base_dir}")
-				print(f"Resolved path: {abs_path}")
+				# logger.info(f"Path escapes base directory: {path}")
+				# logger.info(f"Base directory: {base_dir}")
+				# logger.info(f"Resolved path: {abs_path}")
 				return False  # Reject any path that escapes the base directory
 
 
