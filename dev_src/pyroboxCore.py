@@ -2679,7 +2679,6 @@ class EasyServerRunner:
 			logger.info("Server stopped")
 
 
-
 def runner(port=0, directory="", bind="", arg_parse=True, handler=SimpleHTTPRequestHandler, force_log_server_details=False) -> EasyServerRunner:
 
 	EasyServer = EasyServerRunner(
@@ -2695,7 +2694,6 @@ def runner(port=0, directory="", bind="", arg_parse=True, handler=SimpleHTTPRequ
 	_log_details(force_log_server_details)
 
 	return EasyServer
-
 
 if __name__ == '__main__':
 	runner().run()
