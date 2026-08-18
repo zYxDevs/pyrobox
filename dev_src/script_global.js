@@ -682,7 +682,6 @@ class Popup_Msg {
 		popup_bg = createElement("div");
 		popup_bg.classList.add("modal_bg");
 		popup_bg.id = "popup-bg-" + popup_id;
-		popup_bg.style.backgroundColor = "#000000EE";
 		popup_bg.onclick = function () {
 			that.close();
 		};
@@ -784,6 +783,10 @@ class Popup_Msg {
 			return;
 		}
 
+		if (typeof theme_controller !== 'undefined' && theme_controller.fa_ok) {
+			theme_controller.del_fa_alt(this.popup_obj);
+		}
+
 		this.popup_obj.classList.add("active");
 		config.popup_msg_open = this;
 
@@ -839,6 +842,10 @@ class Popup_Msg {
 			script_tag.innerHTML = script;
 			this.content.appendChild(script_tag);
 		}
+
+		if (typeof theme_controller !== 'undefined' && theme_controller.fa_ok) {
+			theme_controller.del_fa_alt(this.popup_obj);
+		}
 	}
 }
 var popup_msg = new Popup_Msg();
@@ -851,55 +858,260 @@ class Toaster {
 	constructor() {
 		this.container = createElement("div");
 		this.container.classList.add("toast-box");
-		document.body.appendChild(this.container);
+		if (document.body) {
+			document.body.appendChild(this.container);
+		} else {
+			window.addEventListener("DOMContentLoaded", () => {
+				document.body.appendChild(this.container);
+			});
+		}
 
-		this.default_bg = "#005165ed";
-
-		this.queue = []; // queue to prevent multiple toasts from being displayed at the same time
+		this.maxToasts = 5;
+		this.activeToasts = [];
+		this._recentRegistry = new Map();
 	}
 
-
 	/**
-	 * Displays a toast message on the screen.
-	 * @async
-	 * @param {string} msg - The message to be displayed in the toast.
-	 * @param {number} time - The duration for which the toast should be displayed, in milliseconds.
-	 * @param {string} [bgcolor=''] - The background color of the toast. If not provided, the default background color will be used.
-	 * @returns {Promise<void>}
+	 * Displays a toast notification on the screen.
+	 * @param {string|Object} msg - The message to be displayed or an options object.
+	 * @param {number|string} [time] - Duration in ms, or category/background color if passed as a string.
+	 * @param {string} [bgcolor=''] - The category or background color of the toast.
+	 * @returns {Promise<void> & { close: Function, el: HTMLElement }}
 	 */
-	async toast(msg, time, bgcolor = '') {
-		// toaster is not safe as popup by design
-		var sleep = 3000;
+	toast(msg, time, bgcolor = '') {
+		let text = msg;
+		let duration = time;
+		let customBg = bgcolor;
+		let type = "";
+		let icon = "";
+		let closeable = true;
 
-		while (this.queue.length > 2) {
-			await tools.sleep(100);
+		if (typeof msg === "object" && msg !== null && !(msg instanceof Element)) {
+			text = msg.message || msg.msg || msg.text || "";
+			duration = tools.is_defined(msg.duration) ? msg.duration : (tools.is_defined(msg.time) ? msg.time : undefined);
+			customBg = msg.bgcolor || msg.color || msg.category || "";
+			type = msg.type || msg.category || "";
+			icon = msg.icon || "";
+			if (tools.is_defined(msg.closeable)) closeable = Boolean(msg.closeable);
 		}
-		this.queue.push(true);
 
-		let toastBody = createElement("div");
+		// If duration was passed as category/color string
+		if (typeof duration === "string" && !customBg && isNaN(Number(duration))) {
+			customBg = duration;
+			duration = undefined;
+		}
+
+		let sleepTime = 3500;
+		if (tools.is_defined(duration)) {
+			sleepTime = Number(duration);
+		} else if (typeof text === "string") {
+			sleepTime = Math.max(3000, Math.min(8000, text.length * 60));
+		}
+
+		// Normalize semantic type
+		const rawCat = (type || customBg || "").toLowerCase();
+		if (rawCat.includes("green") || rawCat.includes("185") || rawCat.includes("10b981") || rawCat.includes("success")) {
+			type = "success";
+		} else if (rawCat.includes("red") || rawCat.includes("225") || rawCat.includes("239") || rawCat.includes("f43f5e") || rawCat.includes("danger") || rawCat.includes("error")) {
+			type = "error";
+		} else if (rawCat.includes("orange") || rawCat.includes("yellow") || rawCat.includes("230") || rawCat.includes("245") || rawCat.includes("warning") || rawCat.includes("warn")) {
+			type = "warning";
+		} else if (rawCat.includes("blue") || rawCat.includes("cyan") || rawCat.includes("136") || rawCat.includes("165") || rawCat.includes("skyblue") || rawCat.includes("00b4d8") || rawCat.includes("info")) {
+			type = "info";
+		} else if (!type) {
+			type = "info";
+		}
+
+		// De-duplication (suppress duplicate toast within 1.5s)
+		const textStr = String(text instanceof Element ? text.innerText : text);
+		const dedupKey = type + "::" + textStr;
+		const now = Date.now();
+		for (const [k, ts] of this._recentRegistry.entries()) {
+			if (now - ts > 1500) this._recentRegistry.delete(k);
+		}
+		if (this._recentRegistry.has(dedupKey)) {
+			const resolvedPromise = Promise.resolve();
+			resolvedPromise.close = () => {};
+			return resolvedPromise;
+		}
+		this._recentRegistry.set(dedupKey, now);
+
+		// Dismiss oldest toast if maximum reached
+		while (this.activeToasts.length >= this.maxToasts) {
+			const oldest = this.activeToasts[0];
+			if (oldest && typeof oldest.dismiss === "function") {
+				oldest.dismiss();
+			} else {
+				break;
+			}
+		}
+
+		const toastBody = createElement("div");
 		toastBody.classList.add("toast-body");
+		if (type) toastBody.classList.add("toast-" + type);
+
+		// Icon logic matching FinanceManager
+		const categoryIcons = {
+			info: { fa: "fa-solid fa-circle-info", emoji: "ℹ️" },
+			success: { fa: "fa-solid fa-circle-check", emoji: "✅" },
+			warning: { fa: "fa-solid fa-triangle-exclamation", emoji: "⚠️" },
+			error: { fa: "fa-solid fa-circle-xmark", emoji: "❌" }
+		};
+
+		const hasLeadingIconOrEmoji = /^(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff]|<i\s|<span\s)/i.test(textStr.trim());
+
+		if (icon || (!hasLeadingIconOrEmoji && categoryIcons[type])) {
+			const iconEl = createElement("span");
+			iconEl.classList.add("toast-icon");
+			if (icon) {
+				if (typeof icon === "string" && (icon.startsWith("<") || icon.includes("fa-") || icon.length > 2)) {
+					if (icon.includes("fa-")) {
+						iconEl.className = "toast-icon fa " + icon;
+					} else {
+						iconEl.innerHTML = icon;
+					}
+				} else {
+					iconEl.textContent = icon;
+				}
+			} else {
+				const catInfo = categoryIcons[type] || categoryIcons.info;
+				iconEl.innerHTML = `<span class="fa ${catInfo.fa}">${catInfo.emoji}</span>`;
+			}
+			toastBody.appendChild(iconEl);
+		}
+
+		// Message element
+		const msgEl = createElement("div");
+		msgEl.classList.add("toast-message");
+		if (text instanceof Element) {
+			msgEl.appendChild(text);
+		} else if (typeof text === "string") {
+			if (text.includes("<") && text.includes(">")) {
+				msgEl.innerHTML = text;
+			} else {
+				msgEl.innerText = text;
+			}
+		} else {
+			msgEl.innerText = String(text);
+		}
+		toastBody.appendChild(msgEl);
+
+		// Close button
+		let dismissHandler = () => {};
+		if (closeable) {
+			const closeBtn = createElement("button");
+			closeBtn.classList.add("toast-close-btn");
+			closeBtn.setAttribute("type", "button");
+			closeBtn.setAttribute("aria-label", "Close notification");
+			closeBtn.innerHTML = '<span class="fa fa-solid fa-xmark">✕</span>';
+			closeBtn.onclick = (e) => {
+				e.stopPropagation();
+				dismissHandler();
+			};
+			toastBody.appendChild(closeBtn);
+		}
+
+		// Strip emoji fallbacks if Font Awesome is loaded
+		if (typeof theme_controller !== "undefined" && theme_controller.fa_ok) {
+			theme_controller.del_fa_alt(toastBody);
+		}
+
+		let closePromiseResolver;
+		const promise = new Promise((resolve) => {
+			closePromiseResolver = resolve;
+		});
+
+		let timerId = null;
+		let startTime = Date.now();
+		let remainingTime = sleepTime;
+		let isDismissed = false;
+
+		const dismiss = () => {
+			if (isDismissed) return;
+			isDismissed = true;
+			clearTimeout(timerId);
+			const idx = this.activeToasts.indexOf(toastRef);
+			if (idx !== -1) this.activeToasts.splice(idx, 1);
+
+			toastBody.classList.remove("visible");
+			toastBody.classList.add("closing");
+			setTimeout(() => {
+				if (toastBody.parentNode) toastBody.remove();
+				closePromiseResolver();
+			}, 350);
+		};
+
+		dismissHandler = dismiss;
+		const toastRef = { el: toastBody, dismiss: dismiss };
+		this.activeToasts.push(toastRef);
+
+		// Pause / resume countdown on hover
+		if (sleepTime > 0 && isFinite(sleepTime)) {
+			const startTimer = () => {
+				startTime = Date.now();
+				timerId = setTimeout(dismiss, remainingTime);
+			};
+
+			const pauseTimer = () => {
+				clearTimeout(timerId);
+				const elapsed = Date.now() - startTime;
+				remainingTime = Math.max(0, remainingTime - elapsed);
+			};
+
+			toastBody.addEventListener("mouseenter", pauseTimer);
+			toastBody.addEventListener("mouseleave", () => {
+				if (!isDismissed && remainingTime > 0) {
+					startTimer();
+				}
+			});
+		}
 
 		this.container.appendChild(toastBody);
 
-		await tools.sleep(50); // wait for dom to update
+		// Trigger entrance animation
+		requestAnimationFrame(() => {
+			toastBody.classList.add("visible");
+			if (sleepTime > 0 && isFinite(sleepTime)) {
+				startTime = Date.now();
+				timerId = setTimeout(dismiss, sleepTime);
+			}
+		});
 
-		// SET BG COLOR
-		toastBody.style.backgroundColor = bgcolor || this.default_bg;
+		promise.close = dismiss;
+		promise.el = toastBody;
+		return promise;
+	}
 
-		toastBody.innerText = msg;
-		toastBody.classList.add("visible");
-		if (tools.is_defined(time)) sleep = time;
-		await tools.sleep(sleep);
-		toastBody.classList.remove("visible");
-		await tools.sleep(500);
-		toastBody.remove();
+	success(msg, time) {
+		return this.toast({ msg, time, type: "success" });
+	}
 
-		this.queue.pop();
+	error(msg, time) {
+		return this.toast({ msg, time, type: "error" });
+	}
 
+	warning(msg, time) {
+		return this.toast({ msg, time, type: "warning" });
+	}
+
+	warn(msg, time) {
+		return this.warning(msg, time);
+	}
+
+	info(msg, time) {
+		return this.toast({ msg, time, type: "info" });
+	}
+
+	clear() {
+		const list = [...this.activeToasts];
+		for (const t of list) {
+			t.dismiss();
+		}
 	}
 }
 
 var toaster = new Toaster();
+window.flash = (msg, category, timeout) => toaster.toast(msg, timeout, category);
 
 
 
@@ -913,26 +1125,34 @@ var toaster = new Toaster();
  * @param {string} [options.y_msg="Yes"] - The text to display on the "yes" button.
  * @param {string} [options.n_msg="No"] - The text to display on the "no" button.
  */
-function r_u_sure({ y = null_func, n = null, head = "Are you sure", body = "", y_msg = "Yes", n_msg = "No" } = {}) {
-	// popup_msg.close()
+function r_u_sure({ y = null_func, n = null, head = "Are you sure?", body = "", y_msg = "Continue", n_msg = "Cancel" } = {}) {
 	var box = createElement("div");
+	box.className = "popup-dialog";
 	var msggg = createElement("p");
-	msggg.innerHTML = body; //"This can't be undone!!!"
+	msggg.className = "popup-dialog-msg";
+	msggg.innerHTML = body;
 	box.appendChild(msggg);
-	var y_btn = createElement("div");
-	y_btn.innerText = y_msg;//"Continue"
-	y_btn.className = "pagination center";
-	y_btn.onclick = y;/*function() {
-		that.menu_click('del-p', file);
-	};*/
-	var n_btn = createElement("div");
-	n_btn.innerText = n_msg;//"Cancel"
-	n_btn.className = "pagination center";
+
+	var actionsRow = createElement("div");
+	actionsRow.className = "popup-actions-row";
+
+	var y_btn = createElement("button");
+	y_btn.type = "button";
+	y_btn.innerText = y_msg;
+	y_btn.className = "btn btn-danger";
+	y_btn.onclick = y;
+
+	var n_btn = createElement("button");
+	n_btn.type = "button";
+	n_btn.innerText = n_msg;
+	n_btn.className = "btn";
 	n_btn.onclick = () => { return (n === null) ? popup_msg.close() : n() };
-	box.appendChild(y_btn);
-	box.appendChild(line_break());
-	box.appendChild(n_btn);
-	popup_msg.createPopup(head, box); //"Are you sure?"
+
+	actionsRow.appendChild(y_btn);
+	actionsRow.appendChild(n_btn);
+	box.appendChild(actionsRow);
+
+	popup_msg.createPopup(head, box);
 	popup_msg.open_popup();
 }
 

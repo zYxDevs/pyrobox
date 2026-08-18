@@ -192,19 +192,28 @@
 
 
 		<div id="video-page" class="page">
-			<p><b>Watching:</b> <span id="player_title"></span></p>
+			<div id="video-player-wrapper">
+				<div id="video-backdrop"></div>
 
-			<h2 id="player-warning"></h2>
+				<div id="video-meta-bar">
+					<span class="video-watching-label">Now Playing</span>
+					<h1 id="player_title"></h1>
+					<div id="player-warning" class="video-warning"></div>
+				</div>
 
-			<div id="container">
-				<video controls crossorigin playsinline id="player">
+				<div id="container">
+					<video controls crossorigin playsinline id="player">
+						<source id="player_source" />
+					</video>
+				</div>
 
-					<source id="player_source" />
-				</video>
+				<div id="video-actions-bar">
+					<a id="video_dl_url" download class="video-download-btn">
+						<span class="fa fa-solid fa-download">⬇</span>
+						<span>Download</span>
+					</a>
+				</div>
 			</div>
-
-			<a id="video_dl_url" download class='pagination'>Download</a>
-
 		</div>
 
 		<div id="zip-page" class="page">
@@ -294,75 +303,20 @@
 		</div>
 	</div>
 
-	
 	<script src="/?script_global"></script>
 	<script src="/?asset_script"></script>
-	
+
 	<script src="/?theme_script"></script>
-	
+
 	<script src="/?page_handler_script"></script>
 
 	<script src="/?file_list_script"></script>
 	<script src="/?error_page_script"></script>
 	<script src="/?zip_page_script"></script>
 	<script src="/?admin_page_script"></script>
-	
-	<!-- <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js" crossorigin="anonymous" onerror="document.getElementById('player').style.maxWidth = '98vw'" defer></script> -->
-	<script src="https://cdn.jsdelivr.net/npm/plyr@3.8.4/dist/plyr.polyfilled.js" crossorigin="anonymous" onerror="document.getElementById('player').style.maxWidth = '98vw'" defer></script>
-	<!-- <script src="https://cdn.plyr.io/3.7.8/plyr.js" crossorigin="anonymous" onerror="document.getElementById('player').style.maxWidth = '98vw'" defer></script> -->
-	<script src="/?video_page_script" defer></script>
-	
-	<!-- CodeMirror 5.65.21 (latest v5) from jsDelivr -->
-	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/lib/codemirror.css">
-	<!-- Optional: Uncomment for a specific theme. Available: dracula, material, monokai, solarized, etc. -->
-	<!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/theme/dracula.css"> -->
-	
-	<!-- Core CodeMirror - MUST load first, no defer -->
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/lib/codemirror.js"></script>
-	
-	<!-- CodeMirror modes for syntax highlighting -->
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/mode/python/python.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/mode/javascript/javascript.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/mode/htmlmixed/htmlmixed.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/mode/css/css.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/mode/xml/xml.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/addon/mode/overlay.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/mode/markdown/markdown.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/mode/sql/sql.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/mode/clike/clike.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/mode/go/go.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/mode/php/php.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/mode/ruby/ruby.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/mode/yaml/yaml.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/mode/shell/shell.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/mode/toml/toml.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/mode/r/r.min.js" defer></script>
 
-	<!-- CodeMirror addons -->
-	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/addon/fold/foldgutter.css">
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/addon/edit/matchbrackets.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/addon/edit/closebrackets.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/addon/edit/matchtags.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/addon/search/search.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/addon/search/searchcursor.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/addon/selection/active-line.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/addon/fold/foldcode.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/addon/fold/foldgutter.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/addon/fold/brace-fold.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/addon/fold/xml-fold.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/addon/fold/indent-fold.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/addon/fold/markdown-fold.min.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/addon/fold/comment-fold.min.js" defer></script>
-
-	<script src="/?code_editor_script" defer></script>
-
-	<!-- ASSET_SCRIPT will load at the end with all the classes defined -->
-
-
-
-	<!-- <link rel="stylesheet" href="https://raw.githack.com/RaSan147/pyrobox/main/assets/video.css" /> -->
-	<link rel="preload" href="https://raw.githack.com/RaSan147/pyrobox/main/assets/video.css" onload="this.onload=null;this.rel='stylesheet'" as="style">
-	<noscript><link rel="stylesheet" href="https://raw.githack.com/RaSan147/pyrobox/main/assets/video.css"></noscript>
+	<!-- Page-specific scripts/styles injected here by the server -->
+	<div style="display:none" id="page-scripts-anchor">${PY_PAGE_SCRIPTS}</div>
 
 </body>
 

@@ -631,7 +631,8 @@ def create_zip(self: SH, *args, **kwargs):
 
 	title = "Creating ZIP"
 
-	data = pt.directory_explorer_header().safe_substitute(PY_PAGE_TITLE=title,
+	data = pt.directory_explorer_header().safe_substitute(
+														  PY_PAGE_TITLE=title,
 														  PY_PUBLIC_URL=CoreConfig.address(),
 														  PY_DIR_TREE_NO_JS=dir_navigator(displaypath))
 
@@ -738,9 +739,9 @@ def send_video_data(self: SH, *args, **kwargs):
 	if content_type == self.guess_type(".mov"):
 		content_type = self.guess_type(".mp4")  # add chrome support for .mov
 
-	if not content_type.startswith('video/'):
+	if not (content_type.startswith('video/') or content_type.startswith('audio/')):
 		self.send_error(code=HTTPStatus.NOT_FOUND,
-						message="THIS IS NOT A VIDEO FILE", cookie=cookie)
+						message="THIS IS NOT A MEDIA FILE", cookie=cookie)
 		return None
 
 	displaypath = self.get_displaypath(url_path)
@@ -778,9 +779,12 @@ def send_video_data(self: SH, *args, **kwargs):
 
 	warning = ""
 
-	if content_type not in ['video/mp4', 'video/ogg', 'video/webm']:
-		warning = (
-			'<h2>It seems HTML player may not be able to play this Video format, Try Downloading</h2>')
+	supported_browser_media = [
+		'video/mp4', 'video/ogg', 'video/webm',
+		'audio/mp4', 'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/webm', 'audio/flac', 'audio/aac', 'audio/opus'
+	]
+	if content_type not in supported_browser_media:
+		warning = 'This media format may not be supported by your browser. Try downloading instead.'
 
 	return self.send_json({
 		"status": "success",
@@ -823,9 +827,9 @@ def send_video_page(self: SH, *args, **kwargs):
 	# vid_source = url_path
 	content_type = self.guess_type(os_path)
 
-	if not content_type.startswith('video/'):
+	if not (content_type.startswith('video/') or content_type.startswith('audio/')):
 		self.send_error(code=HTTPStatus.NOT_FOUND,
-						message="THIS IS NOT A VIDEO FILE", cookie=cookie)
+						message="THIS IS NOT A MEDIA FILE", cookie=cookie)
 		return None
 
 	r = []
@@ -834,9 +838,11 @@ def send_video_page(self: SH, *args, **kwargs):
 
 	title = get_titles(displaypath, file=True)
 
-	r.append(pt.directory_explorer_header().safe_substitute(PY_PAGE_TITLE=title,
+	r.append(pt.directory_explorer_header().safe_substitute(
+															PY_PAGE_TITLE=title,
 															PY_PUBLIC_URL=CoreConfig.address(),
-															PY_DIR_TREE_NO_JS=dir_navigator(displaypath)))
+															PY_DIR_TREE_NO_JS=dir_navigator(displaypath),
+															PY_PAGE_SCRIPTS=pt.video_page_assets()))
 
 	encoded = '\n'.join(r).encode(enc, 'surrogateescape')
 	return self.return_txt(encoded, cookie=cookie)
@@ -859,9 +865,10 @@ def send_code_data(self: SH, *args, **kwargs):
 
 	# Check if it's a supported text file
 	supported_extensions = {
-		'.py', '.js', '.html', '.css', '.json', '.xml', '.txt', '.md', '.sql',
-		'.java', '.cpp', '.c', '.h', '.go', '.php', '.rb', '.yaml', '.yml',
-		'.sh', '.bash', '.conf', '.cfg', '.ini', '.properties', '.gradle', '.maven'
+		'.py', '.js', '.ts', '.tsx', '.jsx', '.html', '.htm', '.css', '.scss', '.less',
+		'.json', '.xml', '.svg', '.txt', '.md', '.sql', '.java', '.cpp', '.c', '.h',
+		'.go', '.php', '.rb', '.yaml', '.yml', '.sh', '.bash', '.conf', '.cfg',
+		'.ini', '.properties', '.gradle', '.maven', '.toml', '.r'
 	}
 	
 	file_ext = os.path.splitext(os_path)[1].lower()
@@ -938,7 +945,7 @@ def send_code_data(self: SH, *args, **kwargs):
 		'.xml': 'xml',
 		'.svg': 'xml',
 		'.md': 'markdown',
-		'.txt': 'null',
+		'.txt': 'text',
 		'.sql': 'sql',
 		'.java': 'java',
 		'.cpp': 'cpp',
@@ -951,15 +958,17 @@ def send_code_data(self: SH, *args, **kwargs):
 		'.yml': 'yaml',
 		'.sh': 'shell',
 		'.bash': 'shell',
-		'.conf': 'null',
-		'.cfg': 'null',
-		'.ini': 'null',
-		'.properties': 'null',
+		'.conf': 'text',
+		'.cfg': 'text',
+		'.ini': 'text',
+		'.properties': 'text',
 		'.gradle': 'groovy',
 		'.maven': 'xml',
+		'.toml': 'toml',
+		'.r': 'r',
 	}
 
-	language = language_map.get(file_ext, 'null')
+	language = language_map.get(file_ext, 'text')
 
 	# Get file modification time for conflict detection
 	try:
@@ -1007,9 +1016,11 @@ def send_code_editor_page(self: SH, *args, **kwargs):
 	displaypath = self.get_displaypath(url_path)
 	title = get_titles(displaypath, file=True)
 
-	r.append(pt.directory_explorer_header().safe_substitute(PY_PAGE_TITLE=title,
+	r.append(pt.directory_explorer_header().safe_substitute(
+															PY_PAGE_TITLE=title,
 															PY_PUBLIC_URL=CoreConfig.address(),
-															PY_DIR_TREE_NO_JS=dir_navigator(displaypath)))
+															PY_DIR_TREE_NO_JS=dir_navigator(displaypath),
+															PY_PAGE_SCRIPTS=pt.code_editor_assets()))
 
 	encoded = '\n'.join(r).encode(enc, 'surrogateescape')
 	return self.return_txt(encoded, cookie=cookie)
@@ -1600,7 +1611,7 @@ def del_2_recycle(self: SH, *args, **kwargs):
 		return self.send_text(pt.login_page(), code=HTTPStatus.UNAUTHORIZED, cookie=cookie)
 
 	if user.NOPERMISSION or (not user.DELETE):
-		return self.send_json({"head": "Failed", "body": "You have no permission to delete."}, cookie=cookie)
+		return self.send_json({"status": False, "head": "Failed", "body": "You have no permission to delete."}, cookie=cookie)
 
 	url_path = kwargs.get('url_path', '')
 
@@ -1611,32 +1622,30 @@ def del_2_recycle(self: SH, *args, **kwargs):
 	form = post.form
 
 	if CoreConfig.disabled_func["send2trash"]:
-		return self.send_json({"head": "Failed", "body": "Recycling unavailable! Try deleting permanently..."}, cookie=cookie)
+		return self.send_json({"status": False, "head": "Failed", "body": "Recycling unavailable! Try deleting permanently..."}, cookie=cookie)
 
 	# File link to move to recycle bin
 	filename = form.get_multi_field(verify_name='name', decode=T)[1]
 
 	if not filename or not filename.strip():
-		return self.send_json({"head": "Failed", "body": "Invalid Path:  " + filename}, cookie=cookie)
+		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + filename}, cookie=cookie)
 
 	filename = filename.strip()
 
 	rel_path = self.get_rel_path(filename)
 
 	if not self.path_safety_check(filename, rel_path):
-		return self.send_json({"head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
+		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
 
 	os_f_path = self.translate_path(xpath(url_path, filename))
 
 	self.log_warning(f'<-send2trash-> {os_f_path} by {[uid]}')
 
-	head = "Failed"
 	try:
 		if CoreConfig.OS == 'Android':
 			raise InterruptedError
 		send2trash(os_f_path)
-		msg = "Successfully Moved To Recycle bin " + post.refresh
-		head = "Success"
+		return self.send_json({"status": True, "head": "Success", "body": "Successfully Moved To Recycle bin: " + rel_path}, cookie=cookie)
 	except TrashPermissionError:
 		msg = "Recycling unavailable! Try deleting permanently..."
 	except InterruptedError:
@@ -1645,7 +1654,7 @@ def del_2_recycle(self: SH, *args, **kwargs):
 		traceback.print_exc()
 		msg = "<b>" + rel_path + "</b> " + e.__class__.__name__
 
-	return self.send_json({"head": head, "body": msg}, cookie=cookie)
+	return self.send_json({"status": False, "head": "Failed", "body": msg}, cookie=cookie)
 
 
 @SH.on_req('POST', hasQ="del-p")
@@ -1657,7 +1666,7 @@ def del_permanently(self: SH, *args, **kwargs):
 		return self.send_text(pt.login_page(), code=HTTPStatus.UNAUTHORIZED, cookie=cookie)
 
 	if user.NOPERMISSION or (not user.DELETE):
-		return self.send_json({"head": "Failed", "body": "Recycling unavailable! Try deleting permanently..."}, cookie=cookie)
+		return self.send_json({"status": False, "head": "Failed", "body": "Recycling unavailable! Try deleting permanently..."}, cookie=cookie)
 
 	url_path = kwargs.get('url_path', '')
 
@@ -1671,14 +1680,14 @@ def del_permanently(self: SH, *args, **kwargs):
 	filename = form.get_multi_field(verify_name='name', decode=T)[1]
 
 	if not filename or not filename.strip():
-		return self.send_json({"head": "Failed", "body": "Invalid Path:  " + filename}, cookie=cookie)
+		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + filename}, cookie=cookie)
 
 	filename = filename.strip()
 
 	rel_path = self.get_rel_path(filename)
 
 	if not self.path_safety_check(filename, rel_path):
-		return self.send_json({"head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
+		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
 
 	os_f_path = self.translate_path(xpath(url_path, filename))
 
@@ -1690,11 +1699,11 @@ def del_permanently(self: SH, *args, **kwargs):
 		else:
 			shutil.rmtree(os_f_path, ignore_errors=True)
 
-		return self.send_json({"head": "Success", "body": "PERMANENTLY DELETED  " + rel_path + post.refresh}, cookie=cookie)
+		return self.send_json({"status": True, "head": "Success", "body": "PERMANENTLY DELETED:  " + rel_path}, cookie=cookie)
 
 	except Exception as e:
 		traceback.print_exc()
-		return self.send_json({"head": "Failed", "body": "<b>" + rel_path + "<b>" + e.__class__.__name__}, cookie=cookie)
+		return self.send_json({"status": False, "head": "Failed", "body": "<b>" + rel_path + "</b> " + e.__class__.__name__}, cookie=cookie)
 
 
 @SH.on_req('POST', hasQ="rename")
@@ -1706,7 +1715,7 @@ def rename_content(self: SH, *args, **kwargs):
 		return self.send_text(pt.login_page(), code=HTTPStatus.UNAUTHORIZED, cookie=cookie)
 
 	if user.NOPERMISSION or (not user.MODIFY):
-		return self.send_json({"head": "Failed", "body": "Renaming is disabled."}, cookie=cookie)
+		return self.send_json({"status": False, "head": "Failed", "body": "Renaming is disabled."}, cookie=cookie)
 
 	url_path = kwargs.get('url_path', '')
 
@@ -1720,14 +1729,14 @@ def rename_content(self: SH, *args, **kwargs):
 	filename = form.get_multi_field(verify_name='name', decode=T)[1]
 
 	if not filename or not filename.strip():
-		return self.send_json({"head": "Failed", "body": "Invalid Path:  " + filename}, cookie=cookie)
+		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + filename}, cookie=cookie)
 
 	filename = filename.strip()
 
 	new_name = form.get_multi_field(verify_name='data', decode=T)[1]
 
 	if not new_name or not new_name.strip():
-		return self.send_json({"head": "Failed", "body": "Invalid Path:  " + new_name}, cookie=cookie)
+		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + new_name}, cookie=cookie)
 
 	new_name = new_name.strip()
 
@@ -1735,7 +1744,7 @@ def rename_content(self: SH, *args, **kwargs):
 	new_rel_path = self.get_rel_path(new_name)
 
 	if not self.path_safety_check(filename, new_name, rel_path, new_rel_path):
-		return self.send_json({"head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
+		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
 
 	os_f_path = self.translate_path(xpath(url_path, filename))
 	os_new_f_path = self.translate_path(xpath(url_path, new_name))
@@ -1744,9 +1753,9 @@ def rename_content(self: SH, *args, **kwargs):
 
 	try:
 		os.rename(os_f_path, os_new_f_path)
-		return self.send_json({"head": "Renamed Successfully", "body":  post.refresh}, cookie=cookie)
+		return self.send_json({"status": True, "head": "Success", "body": f"Renamed: {filename} → {new_name}"}, cookie=cookie)
 	except Exception as e:
-		return self.send_json({"head": "Failed", "body": "<b>" + rel_path + "</b><br><b>" + e.__class__.__name__ + "</b> : " + self.get_web_path(str(e), -1)}, cookie=cookie)
+		return self.send_json({"status": False, "head": "Failed", "body": "<b>" + rel_path + "</b><br><b>" + e.__class__.__name__ + "</b> : " + self.get_web_path(str(e), -1)}, cookie=cookie)
 
 
 @SH.on_req('POST', hasQ="info")
@@ -1758,7 +1767,7 @@ def get_info(self: SH, *args, **kwargs):
 		return self.send_text(pt.login_page(), code=HTTPStatus.UNAUTHORIZED, cookie=cookie)
 
 	if user.NOPERMISSION:
-		return self.send_json({"head": "Failed", "body": "You have no permission to view."}, cookie=cookie)
+		return self.send_json({"status": False, "head": "Failed", "body": "You have no permission to view."}, cookie=cookie)
 
 	os_path = kwargs.get('path', '')
 	url_path = kwargs.get('url_path', '')
@@ -1776,25 +1785,25 @@ def get_info(self: SH, *args, **kwargs):
 	filename = form.get_multi_field(verify_name='name', decode=T)[1]
 
 	if not filename or not filename.strip():
-		return self.send_json({"head": "Failed", "body": "Invalid Path:  " + filename}, cookie=cookie)
+		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + filename}, cookie=cookie)
 
 	filename = filename.strip()
 
 	rel_path = self.get_rel_path(filename)
 
 	if not self.path_safety_check(filename, rel_path):
-		return self.send_json({"head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
+		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
 
 	os_f_path = self.translate_path(posixpath.join(url_path, filename))
 
 	self.log_warning(f'Info Checked "{os_f_path}" by: {[uid]}')
 
 	if not os.path.exists(os_f_path):
-		return self.send_json({"head": "Failed", "body": "File/Folder Not Found"}, cookie=cookie)
+		return self.send_json({"status": False, "head": "Failed", "body": "File/Folder Not Found"}, cookie=cookie)
 
 	file_stat = get_stat(os_f_path)
 	if not file_stat:
-		return self.send_json({"head": "Failed", "body": "Permission Denied"}, cookie=cookie)
+		return self.send_json({"status": False, "head": "Failed", "body": "Permission Denied"}, cookie=cookie)
 
 	data = []
 	data.append(["Name", urllib.parse.unquote(
@@ -1840,37 +1849,21 @@ def get_info(self: SH, *args, **kwargs):
 	data.append(["Last Modified", get_dt(file_stat.st_mtime)])
 	data.append(["Last Accessed", get_dt(file_stat.st_atime)])
 
-	body = """
-<style>
-table {
-	font-family: arial, sans-serif;
-	border-collapse: collapse;
-	width: 100%;
-}
-
-td, th {
-	border: 1px solid #00BFFF;
-	text-align: left;
-	padding: 8px;
-}
-
-tr:nth-child(even) {
-	background-color: #111;
-}
-</style>
-
-<table>
+	body = """<table class="properties-table">
+<thead>
 <tr>
-<th>About</th>
-<th>Info</th>
+<th>Property</th>
+<th>Value</th>
 </tr>
+</thead>
+<tbody>
 """
 	for key, val in data:
-		body += "<tr><td>{key}</td><td>{val}</td></tr>".format(
+		body += "<tr><td>{key}</td><td>{val}</td></tr>\n".format(
 			key=key, val=val)
-	body += "</table>"
+	body += "</tbody></table>"
 
-	return self.send_json({"head": "Properties", "body": body, "script": script}, cookie=cookie)
+	return self.send_json({"status": True, "head": "Properties", "body": body, "script": script}, cookie=cookie)
 
 
 @SH.on_req('POST', hasQ="new_folder")
@@ -1882,7 +1875,7 @@ def new_folder(self: SH, *args, **kwargs):
 		return self.send_text(pt.login_page(), code=HTTPStatus.UNAUTHORIZED)
 
 	if user.NOPERMISSION or (not user.MODIFY):
-		return self.send_json({"head": "Failed", "body": "Permission denied."}, cookie=cookie)
+		return self.send_json({"status": False, "head": "Failed", "body": "Permission denied."}, cookie=cookie)
 
 	os_path = kwargs.get('path', '')
 	url_path = kwargs.get('url_path', '')
@@ -1896,14 +1889,14 @@ def new_folder(self: SH, *args, **kwargs):
 	filename = form.get_multi_field(verify_name='name', decode=T)[1]
 
 	if not filename or not filename.strip():
-		return self.send_json({"head": "Failed", "body": "Invalid Path:  " + filename}, cookie=cookie)
+		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + filename}, cookie=cookie)
 
 	filename = filename.strip()
 
 	rel_path = self.get_rel_path(filename)
 
 	if not self.path_safety_check(filename, rel_path):
-		return self.send_json({"head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
+		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
 
 	os_f_path = self.translate_path(posixpath.join(url_path, filename))
 
@@ -1911,15 +1904,15 @@ def new_folder(self: SH, *args, **kwargs):
 
 	try:
 		if os.path.exists(os_f_path):
-			return self.send_json({"head": "Failed", "body": "Folder Already Exists:  " + rel_path}, cookie=cookie)
+			return self.send_json({"status": False, "head": "Failed", "body": "Folder Already Exists:  " + rel_path}, cookie=cookie)
 		if os.path.isfile(os_f_path):
-			return self.send_json({"head": "Failed", "body": "File Already Exists:  " + rel_path}, cookie=cookie)
+			return self.send_json({"status": False, "head": "Failed", "body": "File Already Exists:  " + rel_path}, cookie=cookie)
 		os.makedirs(os_f_path)
-		return self.send_json({"head": "Success", "body": "New Folder Created:  " + rel_path + post.refresh}, cookie=cookie)
+		return self.send_json({"status": True, "head": "Success", "body": "New Folder Created:  " + rel_path}, cookie=cookie)
 
 	except Exception as e:
 		self.log_error(traceback.format_exc())
-		return self.send_json({"head": "Failed", "body": f"<b>{rel_path}</b><br><b>{e.__class__.__name__}</b>"}, cookie=cookie)
+		return self.send_json({"status": False, "head": "Failed", "body": f"<b>{rel_path}</b><br><b>{e.__class__.__name__}</b>"}, cookie=cookie)
 
 
 @SH.on_req('POST')

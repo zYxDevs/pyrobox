@@ -10,6 +10,9 @@ __all__ = [
 	"error_page",
 	"theme_script",
 	"video_page_script",
+	"video_page_assets",
+	"code_editor_assets",
+	"no_page_assets",
 	"page_handler_script",
 	"admin_page_script",
 	"login_page",
@@ -87,6 +90,62 @@ def zip_page_script():
 
 def code_editor_script():
 	return get_template("script_code_editor.js")
+
+
+def no_page_assets() -> str:
+	"""Return empty string — no page-specific assets needed."""
+	return ""
+
+
+def video_page_assets() -> str:
+	"""Return HTML tags to load Plyr and video.css, injected only on video pages."""
+	return (
+		'\t<!-- Plyr video player (video pages only) -->\n'
+		'\t<link rel="preload" href="https://raw.githack.com/RaSan147/pyrobox/main/assets/video.css"'
+		' onload="this.onload=null;this.rel=\'stylesheet\'" as="style">\n'
+		'\t<noscript><link rel="stylesheet" href="https://raw.githack.com/RaSan147/pyrobox/main/assets/video.css"></noscript>\n'
+		'\t<script src="https://cdn.jsdelivr.net/npm/plyr@3.8.4/dist/plyr.polyfilled.js"'
+		' crossorigin="anonymous" onerror="document.getElementById(\'player\').style.maxWidth=\'98vw\'" defer></script>\n'
+		'\t<script src="/?video_page_script" defer></script>\n'
+	)
+
+
+_CODEMIRROR_BASE = "https://cdn.jsdelivr.net/npm/codemirror@5.65.21"
+
+def code_editor_assets() -> str:
+	"""Return HTML tags to load CodeMirror + all modes/addons, injected only on code-editor pages."""
+	base = _CODEMIRROR_BASE
+	modes = [
+		"python/python", "javascript/javascript", "htmlmixed/htmlmixed",
+		"css/css", "xml/xml", "markdown/markdown", "sql/sql", "clike/clike",
+		"go/go", "php/php", "ruby/ruby", "yaml/yaml", "shell/shell",
+		"toml/toml", "r/r",
+	]
+	addons = [
+		"edit/matchbrackets", "edit/closebrackets", "edit/matchtags",
+		"search/search", "search/searchcursor",
+		"selection/active-line",
+		"fold/foldcode", "fold/foldgutter", "fold/brace-fold",
+		"fold/xml-fold", "fold/indent-fold", "fold/markdown-fold", "fold/comment-fold",
+		"mode/overlay",
+	]
+	lines = [
+		'\t<!-- CodeMirror 5.65.21 (code-editor pages only) -->',
+		f'\t<link rel="stylesheet" href="{base}/lib/codemirror.css">',
+		f'\t<link rel="stylesheet" href="{base}/addon/fold/foldgutter.css">',
+		# Themes (switchable via script_code_editor.js)
+		# f'\t<link rel="stylesheet" href="{base}/theme/material-darker.css">',
+		# f'\t<link rel="stylesheet" href="{base}/theme/material-palenight.css">',
+		f'\t<link rel="stylesheet" href="{base}/theme/material-ocean.css">',
+		# Core must load synchronously (no defer)
+		f'\t<script src="{base}/lib/codemirror.js"></script>',
+	]
+	for mode in modes:
+		lines.append(f'\t<script src="{base}/mode/{mode}.min.js" defer></script>')
+	for addon in addons:
+		lines.append(f'\t<script src="{base}/addon/{addon}.min.js" defer></script>')
+	lines.append('\t<script src="/?code_editor_script" defer></script>')
+	return "\n".join(lines) + "\n"
 
 
 

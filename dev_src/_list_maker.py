@@ -201,17 +201,18 @@ def list_directory_html(self:SH, path, user:User, cookie:Union[SimpleCookie, str
 			_is_dir_ =False
 			size = fmbytes(file.stat().st_size)
 			__, ext = posixpath.splitext(name)
+			mime = self.guess_type(linkname)
 			if ext=='.html':
 				r_files.append(LIST_STRING % ("link", urllib.parse.quote(linkname,
 									errors='surrogatepass'),
 									html.escape(displayname, quote=False)))
 
-			elif self.guess_type(linkname).startswith('video/'):
+			elif mime.startswith(('video/', 'audio/')):
 				r_files.append(LIST_STRING % ("vid", urllib.parse.quote(linkname,
 									errors='surrogatepass'),
 									html.escape(displayname, quote=False)))
 
-			elif self.guess_type(linkname).startswith('image/'):
+			elif mime.startswith('image/'):
 				r_files.append(LIST_STRING % ("file", urllib.parse.quote(linkname,
 									errors='surrogatepass'),
 									html.escape(displayname, quote=False)))
@@ -280,6 +281,8 @@ def list_directory(self:SH, path, user:User, cookie:Union[SimpleCookie, str]=Non
 				# f  : File
 				# d  : Directory
 				# v  : Video
+				# a  : Audio
+				# i  : Image
 				# h  : HTML
 	f_li = [] # file_names
 	s_li = [] # size list
@@ -323,15 +326,20 @@ def list_directory(self:SH, path, user:User, cookie:Union[SimpleCookie, str]=Non
 				size = ""
 				
 			__, ext = posixpath.splitext(name)
+			mime = self.guess_type(linkname)
 			if ext=='.html':
 				r_li.append('h'+ urllib.parse.quote(linkname, errors='surrogatepass'))
 				f_li.append(displayname)
 
-			elif self.guess_type(linkname).startswith('video/'):
+			elif mime.startswith('video/'):
 				r_li.append('v'+ urllib.parse.quote(linkname, errors='surrogatepass'))
 				f_li.append(displayname)
 
-			elif self.guess_type(linkname).startswith('image/'):
+			elif mime.startswith('audio/'):
+				r_li.append('a'+ urllib.parse.quote(linkname, errors='surrogatepass'))
+				f_li.append(displayname)
+
+			elif mime.startswith('image/'):
 				r_li.append('i'+ urllib.parse.quote(linkname, errors='surrogatepass'))
 				f_li.append(displayname)
 

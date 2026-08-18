@@ -8,19 +8,37 @@ class ContextMenu {
 	async on_result(self) {
 		var data = false;
 		if (self.status == 200) {
-			data = tools.safeJSONParse(self.responseText, ["head", "body", "script"], 5000);
+			data = tools.safeJSONParse(self.responseText, ["status", "head", "body", "script"], 5000);
 		}
 		popup_msg.close();
 		await tools.sleep(300);
 		if (data) {
-			popup_msg.createPopup(data["head"], data["body"]);
-			if (data["script"]) {
+			const isSuccess = data.status === true;
+			const head = data.head || (isSuccess ? "Success" : "Failed");
+			const headIcon = isSuccess
+				? "<span class='fa fa-solid fa-circle-check' style='color:var(--color-success);margin-right:8px;'>✅</span> "
+				: "<span class='fa fa-solid fa-circle-xmark' style='color:var(--color-danger);margin-right:8px;'>❌</span> ";
+			
+			let bodyContent = data.body || "";
+			if (isSuccess) {
+				page_controller.refresh_dir();
+			}
+
+			if (head !== "Properties") {
+				bodyContent += "<div class='popup-actions-row' style='justify-content:center;margin-top:16px;'><button type='button' class='btn btn-primary' onclick='popup_msg.close()'>OK</button></div>";
+			}
+
+			popup_msg.createPopup(headIcon + head, bodyContent);
+			if (data.script) {
 				let script = document.createElement("script");
-				script.innerHTML = data["script"];
+				script.innerHTML = data.script;
 				document.body.appendChild(script);
 			}
 		} else {
-			popup_msg.createPopup("Failed", "Server didn't respond<br>response: " + self.status);
+			popup_msg.createPopup(
+				"<span class='fa fa-solid fa-circle-xmark' style='color:var(--color-danger);margin-right:8px;'>❌</span> Failed",
+				"<div class='popup-dialog-msg'>Server didn't respond<br>Status: " + self.status + "</div><div class='popup-actions-row' style='justify-content:center;'><button type='button' class='btn' onclick='popup_msg.close()'>OK</button></div>"
+			);
 		}
 		popup_msg.open_popup();
 	}
@@ -48,37 +66,66 @@ class ContextMenu {
 	rename_data() {
 		let new_name = byId("input_rename").value;
 
-		this.menu_click("rename", this.old_name, new_name, null, () => { page_controller.refresh_dir() });
-		// popup_msg.createPopup("Done!", "New name: "+new_name)
-		// popup_msg.open_popup()
+		this.menu_click("rename", this.old_name, new_name);
 	}
 	async rename(link, name) {
 		await popup_msg.close();
 		popup_msg.createPopup("Rename",
-			"Enter new name: <input id='input_rename' type='text'><br><br><div class='pagination center' onclick='context_menu.rename_data()'>Change!</div>"
+			`<div class="popup-form">
+				<label class="popup-form-label">Enter new name:</label>
+				<input id="input_rename" class="popup-input" type="text" autocomplete="off" spellcheck="false">
+				<div class="popup-actions-row">
+					<button type="button" class="btn btn-primary" onclick="context_menu.rename_data()">Change</button>
+					<button type="button" class="btn" onclick="popup_msg.close()">Cancel</button>
+				</div>
+			</div>`
 		);
 		
 		popup_msg.open_popup();
 		this.old_name = link;
-		byId("input_rename").value = name;
-		byId("input_rename").focus();
+		const input = byId("input_rename");
+		if (input) {
+			input.value = name;
+			input.focus();
+			input.select();
+			input.onkeydown = (e) => {
+				if (e.key === "Enter") {
+					this.rename_data();
+				}
+			};
+		}
 	}
+	create_menu_item(emoji, faClass, text, onClick, extraClass = "") {
+		let item = createElement("div");
+		item.className = "disable_selection popup-btn menu_options" + (extraClass ? " " + extraClass : "");
+
+		let iconSpan = createElement("span");
+		iconSpan.className = "menu-icon fa " + faClass;
+		iconSpan.innerText = emoji;
+
+		let labelSpan = createElement("span");
+		labelSpan.className = "menu-label";
+		labelSpan.innerText = text;
+
+		item.appendChild(iconSpan);
+		item.appendChild(labelSpan);
+
+		if (theme_controller.fa_ok) {
+			theme_controller.del_fa_alt(iconSpan);
+		}
+
+		item.onclick = onClick;
+		return item;
+	}
+
 	show_menus(file, name, type) {
 		let that = this;
 		let menu = createElement("div");
 
-
-		const refresh = () => {
-			page_controller.refresh_dir();
-		}
-
-		let new_tab = createElement("div");
-		new_tab.innerText = "↗️" + " New tab";
-		new_tab.className = "disable_selection popup-btn menu_options";
-		new_tab.onclick = function () {
+		let new_tab = that.create_menu_item("↗️", "fa-solid fa-arrow-up-right-from-square", "New tab", function () {
 			window.open(file, '_blank');
 			popup_msg.close();
-		}
+		});
 		menu.appendChild(new_tab);
 		
 		// Add "Open in Editor" option for text files
@@ -90,48 +137,36 @@ class ContextMenu {
 			const file_ext = name.substr(name.lastIndexOf('.')).toLowerCase();
 			
 			if (text_extensions.includes(file_ext)) {
-				let open_editor = createElement("div");
-				open_editor.innerText = "✎ " + " Open in Editor";
-				open_editor.className = "disable_selection popup-btn menu_options";
-				open_editor.onclick = function () {
+				let open_editor = that.create_menu_item("✎", "fa-solid fa-pen-to-square", "Open in Editor", function () {
 					popup_msg.close();
 					// Navigate to editor view
 					window.location.href = go_link('edit', file);
-				}
+				});
 				menu.appendChild(open_editor);
 			}
 		}
 		
 		if (type != "folder") {
-			let download = createElement("div");
-			download.innerText = "📥" + " Download";
-			download.className = "disable_selection popup-btn menu_options";
-			download.onclick = function () {
+			let download = that.create_menu_item("📥", "fa-solid fa-download", "Download", function () {
 				tools.download(file, name);
 				popup_msg.close();
-			}
+			});
 			if (user.permissions.DOWNLOAD) {
 				menu.appendChild(download);
 			}
 		}
 		if (type == "folder") {
-			let dl_zip = createElement("div");
-			dl_zip.innerText = "📦" + " Download as Zip";
-			dl_zip.className = "disable_selection popup-btn menu_options";
-			dl_zip.onclick = function () {
+			let dl_zip = that.create_menu_item("📦", "fa-solid fa-file-zipper", "Download as Zip", function () {
 				popup_msg.close();
 				window.open(go_link('czip', file), '_blank');
 				// czip = "Create Zip"
-			}
+			});
 			if (user.permissions.ZIP) {
 				menu.appendChild(dl_zip);
 			}
 		}
 
-		let copy = createElement("div");
-		copy.innerText = "📋" + " Copy link";
-		copy.className = "disable_selection popup-btn menu_options";
-		copy.onclick = async function (ev) {
+		let copy = that.create_menu_item("📋", "fa-solid fa-copy", "Copy link", async function (ev) {
 			popup_msg.close();
 
 			let success = await tools.copy_2(ev, tools.full_path(file));
@@ -140,58 +175,40 @@ class ContextMenu {
 			} else {
 				toaster.toast("Failed to copy!");
 			}
-		}
+		});
 		menu.appendChild(copy);
 
-		let rename = createElement("div");
-		rename.innerText = "✏️" + " Rename";
-		rename.className = "disable_selection popup-btn menu_options";
-		rename.onclick = function () {
+		let rename = that.create_menu_item("✏️", "fa-solid fa-pen", "Rename", function () {
 			that.rename(file, name);
-		}
+		});
 
 		if (user.permissions.MODIFY) {
 			menu.appendChild(rename);
 		}
 
-		let del = createElement("div");
-		del.innerText = "🗑️" + " Delete";
-		del.className = "disable_selection popup-btn menu_options";
-		var xxx = 'F';
-		if (type == "folder") {
-			xxx = 'D';
-		}
-		del.onclick = function () {
-			that.menu_click('del-f', file, null, refresh);
-		};
+		let del = that.create_menu_item("🗑️", "fa-solid fa-trash-can", "Delete", function () {
+			that.menu_click('del-f', file);
+		}, "menu_options_danger");
 
 		if (user.permissions.DELETE) {
 			menu.appendChild(del);
 		}
 
-		let del_P = createElement("div");
-		del_P.innerText = "🔥" + " Delete permanently";
-		del_P.className = "disable_selection popup-btn menu_options";
-
-
-		del_P.onclick = () => {
+		let del_P = that.create_menu_item("🔥", "fa-solid fa-fire", "Delete permanently", () => {
 			r_u_sure({
 				y: () => {
-					that.menu_click('del-p', file, null, refresh);
+					that.menu_click('del-p', file);
 				}, head: "Are you sure?", body: "This can't be undone!!!", y_msg: "Continue", n_msg: "Cancel"
 			})
-		}
+		}, "menu_options_danger");
 
 		if (user.permissions.DELETE) {
 			menu.appendChild(del_P);
 		}
 
-		let property = createElement("div");
-		property.innerText = "📅" + " Properties";
-		property.className = "disable_selection popup-btn menu_options";
-		property.onclick = function () {
+		let property = that.create_menu_item("📅", "fa-solid fa-circle-info", "Properties", function () {
 			that.menu_click('info', file);
-		};
+		});
 
 		if (user.permissions.VIEW) {
 			menu.appendChild(property);
@@ -202,22 +219,23 @@ class ContextMenu {
 	}
 	create_folder() {
 		let folder_name = byId('folder-name').value;
-		this.menu_click('new_folder', folder_name, null, () => { page_controller.refresh_dir() });
+		this.menu_click('new_folder', folder_name);
 	}
 }
 var context_menu = new ContextMenu();
 //context_menu.show_menus("next", "video");
 
-function show_response(url, add_reload_btn = true) {
+function show_response(url) {
 	let xhr = new XMLHttpRequest();
 	xhr.onreadystatechange = function () {
 		if (xhr.readyState == XMLHttpRequest.DONE) {
 			let msg = xhr.responseText;
-			if (add_reload_btn) {
-				msg = msg + "<br><br><div class='pagination' onclick='window.location.reload()'>Refresh🔄️</div>";
-			}
+			page_controller.refresh_dir();
 			popup_msg.close();
-			popup_msg.createPopup("Result", msg);
+			popup_msg.createPopup(
+				"Result",
+				msg + "<div class='popup-actions-row' style='justify-content:center;margin-top:16px;'><button type='button' class='btn btn-primary' onclick='popup_msg.close()'>OK</button></div>"
+			);
 			popup_msg.open_popup();
 		}
 	}

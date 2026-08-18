@@ -720,11 +720,12 @@ const upload_man = new UploadManager();
 class FileManager {
 	constructor() {
 		this.typeIcons = {
-			'd': { icon: '📂', class: 'link', type: 'folder' },
-			'v': { icon: '🎥', class: 'vid', type: 'video' },
-			'i': { icon: '🌉', class: 'file', type: 'image' },
-			'f': { icon: '📄', class: 'file', type: 'file' },
-			'h': { icon: '🔗', class: 'html', type: 'html' }
+			'd': { icon: '📁', faClass: 'fa-solid fa-folder', class: 'link folder', type: 'folder' },
+			'v': { icon: '🎬', faClass: 'fa-solid fa-film', class: 'vid video', type: 'video' },
+			'a': { icon: '🎵', faClass: 'fa-solid fa-music', class: 'vid audio', type: 'audio' },
+			'i': { icon: '🖼️', faClass: 'fa-solid fa-image', class: 'file image', type: 'image' },
+			'f': { icon: '📄', faClass: 'fa-solid fa-file-lines', class: 'file', type: 'file' },
+			'h': { icon: '🔗', faClass: 'fa-solid fa-link', class: 'html', type: 'html' }
 		};
 	}
 
@@ -734,16 +735,22 @@ class FileManager {
 		const options = [
 			{
 				text: "Sort By",
+				emoji: "🔀",
+				faClass: "fa-solid fa-arrow-down-wide-short",
 				className: "disable_selection popup-btn menu_options",
 				action: () => this.Show_sort_by()
 			},
 			{
 				text: "New Folder", 
+				emoji: "📁",
+				faClass: "fa-solid fa-folder-plus",
 				className: "disable_selection popup-btn menu_options",
 				action: () => this.Show_folder_maker()
 			},
 			{ 
 				text: "Upload Files", 
+				emoji: "📤",
+				faClass: "fa-solid fa-cloud-arrow-up",
 				className: `disable_selection popup-btn menu_options ${user.permissions.NOPERMISSION || !user.permissions.UPLOAD ? "disabled" : ""}`,
 				action: () => this.Show_upload_files()
 			}
@@ -753,8 +760,23 @@ class FileManager {
 			if (opt.className.includes("disabled")) return;
 			
 			const element = createElement("div");
-			element.innerText = opt.text;
 			element.className = opt.className;
+
+			const iconSpan = createElement("span");
+			iconSpan.className = "menu-icon fa " + opt.faClass;
+			iconSpan.innerText = opt.emoji;
+
+			const labelSpan = createElement("span");
+			labelSpan.className = "menu-label";
+			labelSpan.innerText = opt.text;
+
+			element.appendChild(iconSpan);
+			element.appendChild(labelSpan);
+
+			if (typeof theme_controller !== 'undefined' && theme_controller.fa_ok) {
+				theme_controller.del_fa_alt(iconSpan);
+			}
+
 			element.onclick = opt.action;
 			menu.appendChild(element);
 		});
@@ -766,10 +788,25 @@ class FileManager {
 	Show_folder_maker() {
 		popup_msg.createPopup(
 			"Create Folder",
-			`Enter folder name: <input id='folder-name' type='text'><br><br>
-			 <div class='pagination center' onclick='context_menu.create_folder()'>Create</div>`
+			`<div class="popup-form">
+				<label class="popup-form-label">Enter folder name:</label>
+				<input id="folder-name" class="popup-input" type="text" placeholder="New folder name" autocomplete="off">
+				<div class="popup-actions-row">
+					<button type="button" class="btn btn-primary" onclick="context_menu.create_folder()">Create</button>
+					<button type="button" class="btn" onclick="popup_msg.close()">Cancel</button>
+				</div>
+			</div>`
 		);
 		popup_msg.open_popup();
+		const input = byId("folder-name");
+		if (input) {
+			input.focus();
+			input.onkeydown = (e) => {
+				if (e.key === "Enter") {
+					context_menu.create_folder();
+				}
+			};
+		}
 	}
 
 	Show_sort_by() {
@@ -892,26 +929,29 @@ class FileManager {
 								  '.properties', '.gradle', '.maven'];
 		const file_ext = name.substr(name.lastIndexOf('.')).toLowerCase();
 		
-		if (r.startsWith('v')) {
-			// Video files
+		let itemTypeInfo = typeInfo;
+
+		if (r.startsWith('v') || r.startsWith('a')) {
+			// Video or Audio media files
 			link.href = go_link("vid", r_);
 		} else if (text_extensions.includes(file_ext)) {
 			// Text files - open in editor
 			link.href = go_link("edit", r_);
+			itemTypeInfo = { icon: '📝', class: 'file code', type: 'file' };
 		} else {
 			// Other files - normal download link
 			link.href = r_;
 		}
 		
 		link.title = name;
-		link.className = `all_link disable_selection ${typeInfo.class}`;
+		link.className = `all_link disable_selection ${itemTypeInfo.class}`;
 		
-		link.appendChild(this.createIconElement(typeInfo.icon));
+		link.appendChild(this.createIconElement(itemTypeInfo.icon));
 		link.appendChild(this.createNameElement(name, s_li[i]));
 		
 		link.oncontextmenu = (ev) => {
 			ev.preventDefault();
-			context_menu.show_menus(r_, name, typeInfo.type);
+			context_menu.show_menus(r_, name, itemTypeInfo.type);
 			return false;
 		};
 		
@@ -924,14 +964,14 @@ class FileManager {
 	createIconElement(icon) {
 		const element = createElement("span");
 		element.className = "link_icon";
-		element.innerHTML = icon.toHtmlEntities();
+		element.innerHTML = icon.toHtmlEntities ? icon.toHtmlEntities() : icon;
 		return element;
 	}
 
 	createNameElement(name, size) {
 		const element = createElement("span");
 		element.className = "link_name";
-		element.innerText = ` ${name}`;
+		element.innerText = " " + name;
 		
 		if (size) {
 			element.appendChild(createElement("br"));

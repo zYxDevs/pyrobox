@@ -1175,31 +1175,128 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
 	if not mimetypes.inited:
 		mimetypes.init()  # try to read system mime.types
-	extensions_map = mimetypes.types_map.copy()
-	extensions_map.update({
+	_custom_mime_types = {
 		'': 'application/octet-stream',  # Default
-			'.py': 'text/x-python',
-			'.c': 'text/x-c',
-			'.h': 'text/x-c',
-			'.css': 'text/css',
 
-			'.gz': 'application/gzip',
-			'.Z': 'application/octet-stream',
-			'.bz2': 'application/x-bzip2',
-			'.xz': 'application/x-xz',
+		# Audio
+		'.mp3': 'audio/mpeg',
+		'.m4a': 'audio/mp4',
+		'.m4b': 'audio/mp4',
+		'.m4p': 'audio/mp4',
+		'.m4r': 'audio/mp4',
+		'.aac': 'audio/aac',
+		'.opus': 'audio/opus',
+		'.ogg': 'audio/ogg',
+		'.oga': 'audio/ogg',
+		'.flac': 'audio/flac',
+		'.wav': 'audio/wav',
+		'.weba': 'audio/webm',
+		'.wma': 'audio/x-ms-wma',
+		'.aif': 'audio/x-aiff',
+		'.aiff': 'audio/x-aiff',
+		'.aifc': 'audio/x-aiff',
+		'.mid': 'audio/midi',
+		'.midi': 'audio/midi',
+		'.mp2': 'audio/mpeg',
+		'.mp1': 'audio/mpeg',
+		'.ac3': 'audio/ac3',
+		'.eac3': 'audio/eac3',
+		'.dts': 'audio/vnd.dts',
+		'.amr': 'audio/amr',
+		'.ape': 'audio/x-ape',
+		'.alac': 'audio/x-alac',
 
-			'.webp': 'image/webp',
+		# Video
+		'.mp4': 'video/mp4',
+		'.m4v': 'video/mp4',
+		'.mkv': 'video/x-matroska',
+		'.webm': 'video/webm',
+		'.ogv': 'video/ogg',
+		'.avi': 'video/x-msvideo',
+		'.mov': 'video/quicktime',
+		'.qt': 'video/quicktime',
+		'.wmv': 'video/x-ms-wmv',
+		'.flv': 'video/x-flv',
+		'.f4v': 'video/x-f4v',
+		'.3gp': 'video/3gpp',
+		'.3g2': 'video/3gpp2',
+		'.ts': 'video/mp2t',
+		'.mts': 'video/mp2t',
+		'.m2ts': 'video/mp2t',
+		'.vob': 'video/x-ms-vob',
+		'.divx': 'video/divx',
+		'.asf': 'video/x-ms-asf',
+		'.rm': 'application/vnd.rn-realmedia',
+		'.rmvb': 'application/vnd.rn-realmedia-vbr',
 
-			'opus': 'audio/opus',
-			'.oga': 'audio/ogg',
-			'.wav': 'audio/wav',
+		# Subtitles
+		'.vtt': 'text/vtt',
+		'.srt': 'text/plain',
+		'.ass': 'text/plain',
+		'.ssa': 'text/plain',
 
-			'.ogv': 'video/ogg',
-			'.ogg': 'application/ogg',
-			'.m4a': 'audio/mp4',
+		# Images
+		'.webp': 'image/webp',
+		'.png': 'image/png',
+		'.jpg': 'image/jpeg',
+		'.jpeg': 'image/jpeg',
+		'.jpe': 'image/jpeg',
+		'.gif': 'image/gif',
+		'.svg': 'image/svg+xml',
+		'.svgz': 'image/svg+xml',
+		'.ico': 'image/x-icon',
+		'.bmp': 'image/bmp',
+		'.tiff': 'image/tiff',
+		'.tif': 'image/tiff',
+		'.avif': 'image/avif',
+		'.heic': 'image/heic',
+		'.heif': 'image/heif',
+		'.apng': 'image/apng',
+		'.jxl': 'image/jxl',
 
-			'.br': 'application/x-brotli',
-	})
+		# Web / Code / Documents
+		'.html': 'text/html',
+		'.htm': 'text/html',
+		'.css': 'text/css',
+		'.js': 'text/javascript',
+		'.mjs': 'text/javascript',
+		'.json': 'application/json',
+		'.map': 'application/json',
+		'.wasm': 'application/wasm',
+		'.xml': 'application/xml',
+		'.pdf': 'application/pdf',
+		'.txt': 'text/plain',
+		'.md': 'text/markdown',
+		'.csv': 'text/csv',
+		'.py': 'text/x-python',
+		'.c': 'text/x-c',
+		'.h': 'text/x-c',
+		'.cpp': 'text/x-c',
+
+		# Compressed / Archives
+		'.gz': 'application/gzip',
+		'.Z': 'application/octet-stream',
+		'.bz2': 'application/x-bzip2',
+		'.xz': 'application/x-xz',
+		'.br': 'application/x-brotli',
+		'.tar': 'application/x-tar',
+		'.zip': 'application/zip',
+		'.7z': 'application/x-7z-compressed',
+		'.rar': 'application/vnd.rar',
+		'.iso': 'application/x-iso9660-image',
+
+		# Fonts
+		'.woff': 'font/woff',
+		'.woff2': 'font/woff2',
+		'.ttf': 'font/ttf',
+		'.otf': 'font/otf',
+		'.eot': 'application/vnd.ms-fontobject',
+	}
+	for ext, mime in _custom_mime_types.items():
+		if ext:
+			mimetypes.add_type(mime, ext)
+	extensions_map = mimetypes.types_map.copy()
+	extensions_map.update(_custom_mime_types)
 
 	handlers = {
 		'HEAD': [],
@@ -2101,9 +2198,6 @@ class DealPostData:
 		self.content_type = ""
 
 		self.form = FormData(req, self, fake=True)
-
-
-	refresh = "<br><br><div class='pagination center' onclick='window.location.reload()'>Refresh &#128259;</div>"
 
 	def is_multipart(self):
 		return self.content_type.startswith("multipart/form-data")

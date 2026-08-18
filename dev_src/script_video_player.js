@@ -2,10 +2,6 @@ class Video_Page extends Page {
 	constructor(controller=page_controller, type="vid", handle_part="video-page") {
 		super(controller, type, handle_part);
 
-		// this.my_part = byId(handle_part);
-		// this.type = type;
-		// this.controller = controller;
-
 		this.controls = [
 			'play-large', // The large play button in the center
 			//'restart', // Restart playback
@@ -16,7 +12,7 @@ class Video_Page extends Page {
 			'current-time', // The current time of playback
 			'duration', // The full duration of the media
 			'mute', // Toggle mute
-			'volume', // Volume control // Will be hidden on Android as they have Device Volume controls
+			'volume', // Volume control
 			//'captions', // Toggle captions
 			'settings', // Settings menu
 			//'pip', // Picture-in-picture (currently Safari only)
@@ -32,7 +28,7 @@ class Video_Page extends Page {
 		this.player_title = byId("player_title");
 		this.player_warning = byId("player-warning");
 		this.video_dl_url = byId("video_dl_url");
-
+		this.video_backdrop = byId("video-backdrop");
 
 		this.player = null;
 
@@ -51,7 +47,6 @@ class Video_Page extends Page {
 	async initialize() {
 		this.controller.hide_actions_button(); // Hide actions button, not needed here
 
-
 		var url = tools.add_query_here("vid-data");
 
 		var data = await fetch(url)
@@ -62,7 +57,6 @@ class Video_Page extends Page {
 		var title = data.title;
 		var content_type = data.content_type;
 		var warning = data.warning;
-
 		var subtitles = data.subtitles;
 
 		this.player_title.innerText = title;
@@ -74,7 +68,7 @@ class Video_Page extends Page {
 		if (this.player) {
 			this.player.source = {
 				type: 'video',
-				title: 'Example title',
+				title: title,
 				sources: [
 					{
 						src: video,
@@ -90,10 +84,27 @@ class Video_Page extends Page {
 				volume: 1
 			};
 
+			// Fade in ambient backdrop once Plyr is ready
+			if (this.video_backdrop) {
+				this.player.once('ready', () => {
+					this.video_backdrop.classList.add('loaded');
+				});
+			}
+
 			this.init_online_player(); // Add double click to skip
 		} else {
 			this.player_source.src = video;
 			this.player_source.type = content_type;
+
+			// Fallback backdrop for native player
+			if (this.video_backdrop) {
+				const nativeVideo = document.getElementById('player');
+				if (nativeVideo) {
+					nativeVideo.addEventListener('loadedmetadata', () => {
+						this.video_backdrop.classList.add('loaded');
+					}, { once: true });
+				}
+			}
 		}
 	}
 
@@ -111,6 +122,10 @@ class Video_Page extends Page {
 		this.player_title.innerText = "";
 		this.player_warning.innerHTML = "";
 		this.video_dl_url.href = "";
+		// Reset backdrop
+		if (this.video_backdrop) {
+			this.video_backdrop.classList.remove('loaded');
+		}
 	}
 
 
@@ -129,6 +144,7 @@ class Video_Page extends Page {
 		const skip_ol = createElement("div");
 		// ol.classList.add("plyr__control--overlaid");
 		skip_ol.id = "plyr__time_skip";
+		skip_ol.innerHTML = '<span class="skip-chevrons"></span><span class="skip-seconds"></span>';
 		byClass("plyr")[0].appendChild(skip_ol);
 		//}
 		//create_time_overlay()
@@ -161,7 +177,7 @@ class Video_Page extends Page {
 				this.count = 0;
 				this.last_side = null;
 				this.reseted = 0;
-				skip_ol.style.opacity = "0";
+				skip_ol.classList.remove("active", "bump");
 				this.timer = []
 			}
 		}
@@ -197,14 +213,18 @@ class Video_Page extends Page {
 					counter.reset_count(1);
 					return;
 				}
-				skip_ol.style.opacity = "0.9";
 				player.rewind(change);
 				if (change == 10) {
 					change = ((count - 1) * 10);
 				} else {
 					change = change.toFixed(1);
 				}
-				skip_ol.innerText = "⫷⪡" + "\n" + change + "s";
+				skip_ol.dataset.side = "L";
+				skip_ol.querySelector(".skip-chevrons").textContent = "\u25C0\u25C0";
+				skip_ol.querySelector(".skip-seconds").textContent = change + "s";
+				skip_ol.classList.remove("bump");
+				void skip_ol.offsetWidth; // force reflow for animation restart
+				skip_ol.classList.add("active", "bump");
 			} else if (perc > 60) {
 				if (player.currentTime == player.duration) {
 					return false;
@@ -217,15 +237,18 @@ class Video_Page extends Page {
 				if (player.currentTime > (player.duration - 10)) {
 					change = player.duration - player.currentTime;
 				}
-				skip_ol.style.opacity = "0.9";
-				last_click = "R";
 				player.forward(change);
 				if (change == 10) {
 					change = ((count - 1) * 10);
 				} else {
 					change = change.toFixed(1);
 				}
-				skip_ol.innerText = "⪢⫸ " + "\n" + change + "s";
+				skip_ol.dataset.side = "R";
+				skip_ol.querySelector(".skip-chevrons").textContent = "\u25B6\u25B6";
+				skip_ol.querySelector(".skip-seconds").textContent = change + "s";
+				skip_ol.classList.remove("bump");
+				void skip_ol.offsetWidth; // force reflow for animation restart
+				skip_ol.classList.add("active", "bump");
 			} else {
 				player.togglePlay();
 				counter.last_click = "C";

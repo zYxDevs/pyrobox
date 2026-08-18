@@ -38,7 +38,7 @@ class CodeEditor_Page extends Page {
 		this.is_read_only = false;
 		this.is_truncated = false;
 		this.is_fallback = typeof CodeMirror === 'undefined';
-		this.current_language = 'null';
+		this.current_language = 'text';
 		this.file_size = 0;
 
 		// Bind Topbar offset scroll tracking
@@ -71,7 +71,7 @@ class CodeEditor_Page extends Page {
 				this.editor = CodeMirror(this.editor_container, {
 					value: "Loading...",
 					mode: "null",
-					theme: "default",
+					theme: "material-ocean",
 					lineNumbers: true,
 					lineWrapping: true,
 					indentUnit: 4,
@@ -412,7 +412,7 @@ class CodeEditor_Page extends Page {
 			this.user_can_edit = data.can_edit; // User has permission to edit
 			this.is_read_only = true; // Initialize to read-only by default to prevent accidental edits
 			this.is_truncated = data.is_truncated;
-			this.current_language = data.language;
+			this.current_language = (data.language && data.language !== 'null') ? data.language : 'text';
 			this.file_size = data.file_size;
 
 			// Set line ending selector to match file
@@ -473,7 +473,7 @@ class CodeEditor_Page extends Page {
 					this.save_btn.disabled = true;
 					this.readonly_toggle_btn.disabled = false;
 					this.update_readonly_button_state();
-					this.show_status("Press Ctrl+F to search, or click Enable Editing to modify.", "success");
+					this.show_status("Press Ctrl+F to search, or click Enable Editing to modify.", "info");
 				}
 			} else {
 				// Fallback if CodeMirror not available - create offline editor with line numbers
@@ -519,6 +519,7 @@ class CodeEditor_Page extends Page {
 			'groovy': 'text/x-groovy',
 			'toml': 'text/x-toml',
 			'r': 'text/x-rsrc',
+			'text': null,
 			'null': null
 		};
 
@@ -531,6 +532,8 @@ class CodeEditor_Page extends Page {
 				// Fall back to null mode
 				this.editor.setOption("mode", null);
 			}
+		} else {
+			this.editor.setOption("mode", null);
 		}
 	}
 
@@ -876,18 +879,8 @@ class CodeEditor_Page extends Page {
 	}
 
 	show_status(message, type = "info") {
-		let bgcolor = '#005165ed';
-		if (type === 'error') {
-			bgcolor = '#f44336';
-		} else if (type === 'warning') {
-			bgcolor = '#ff9800';
-		} else if (type === 'success') {
-			bgcolor = '#4CAF50';
-		} else if (type === 'info') {
-			bgcolor = '#2196F3';
-		}
 		if (this.is_active) {
-			toaster.toast(message, 3000, bgcolor);
+			toaster.toast(message, 3000, type);
 		}
 	}
 

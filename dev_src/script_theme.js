@@ -2,9 +2,34 @@ var vh = 0,
 	vw = 0;
 
 class Theme_Controller {
-	// TRON theme controller
+	// TRON and modern theme controller
 	constructor() {
 		this.fa_ok = false;
+		this.current_theme = "dark-cyan";
+		this.init_theme();
+	}
+
+	init_theme() {
+		try {
+			const savedTheme = localStorage.getItem("pyrobox_theme") || "dark-cyan";
+			this.set_theme(savedTheme, false);
+		} catch (e) {
+			this.set_theme("dark-cyan", false);
+		}
+	}
+
+	set_theme(theme_name, save = true) {
+		this.current_theme = theme_name || "dark-cyan";
+		document.documentElement.setAttribute("data-theme", this.current_theme);
+		if (save) {
+			try {
+				localStorage.setItem("pyrobox_theme", this.current_theme);
+			} catch (e) {}
+		}
+	}
+
+	get_theme() {
+		return this.current_theme;
 	}
 
 	switch_init() {
