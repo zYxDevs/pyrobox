@@ -2,10 +2,11 @@ import argparse
 from http import HTTPStatus
 import os
 from typing import Union
+import urllib.parse
 
 from _fs_utils import get_titles, dir_navigator, reverse_humanbytes
 from UX_Tools import xpath
-from pyroDB2 import PickleTable
+from pyroDB3 import PickleTable
 import user_mgmt as u_mgmt
 from user_mgmt import User
 
@@ -204,11 +205,10 @@ class ServerConfig():
 
 
 
-	def get_users(self):
-		return self.uDB.get_column("username")
-
-
-
+	def authorize_user(self, handler: 'ServerHost') -> Tuple[Union[User, None], SimpleCookie]:
+		"""Authenticate request handler using cookies and server settings"""
+		guest = getattr(self, 'guest_id', None) if self.GUESTS else None
+		return self.user_handler.authenticate_handler(handler, allow_guests=self.GUESTS, guest_user=guest)
 
 
 

@@ -3,14 +3,27 @@ import hashlib
 import time, datetime
 from secrets import compare_digest
 from enum import Enum
-from typing import Tuple, List, TypeVar, Union
+from typing import Tuple, List, TypeVar, Union, TYPE_CHECKING
+import posixpath
+from urllib.parse import unquote
+import json
+
+if TYPE_CHECKING:
+	from pyrobox_ServerHost import ServerHost as SH
 
 
+def normalize(p: str) -> str:
+	p = unquote(p)                    # %2e%2e -> ..
+	p = p.replace("\\", "/")          # windows
+	p = posixpath.normpath("/" + p)   # resolves .. and //
+	return p.rstrip("/") or "/"
 
+
+from http.cookies import SimpleCookie
 import binascii
 
 from pyroboxCore import logger
-from pyroDB2 import PickleTable, _PickleTRow
+from pyroDB3 import PickleTable, _PickleTRow
 from data_types import LimitedDict
 
 # Loads user database. Database is plaintext but stores passwords as a hash salted by config.PASSWORD
@@ -19,7 +32,9 @@ from data_types import LimitedDict
 __all__ = [
 	"User",
 	"UserPermission",
-	"permits"
+	"permits",
+	"create_user_cookie",
+	"clear_user_cookie"
 ]
 
 
@@ -179,6 +194,10 @@ class User:
 		else:
 			logger.info(f"User {self.username} password mismatch")
 			return False
+
+	def create_cookie(self) -> SimpleCookie:
+		"""Create a SimpleCookie with user credentials valid for 1 year"""
+		return create_user_cookie(self)
 
 	def __setitem__(self, attr, value):
 		self.update(attr, value)
@@ -516,7 +535,7 @@ class User_handler:
 		user = self.get_user(username)
 		if not user:
 			return False
-		if user.check_token(token):
+		if not user.check_token(token):
 			return False
 
 		user["last_active"] = datetime.datetime.now().strftime("%d/%m/%Y, %H:%M:%S")
@@ -524,6 +543,71 @@ class User_handler:
 		if return_user:
 			return user
 		return True
+
+	def authenticate_cookie(self, cookie: Union[SimpleCookie, None]) -> Union[User, None]:
+		"""Extract user credentials from cookie and return authenticated User or None"""
+		if not cookie:
+			return None
+
+		def get(k):
+			x = cookie.get(k)
+			if x is not None:
+				return x.value
+			return ""
+
+		username = get("user")
+		token = get("token")
+
+		if not (username and token):
+			return None
+
+		user = self.get_user(username)
+		if user and user.check_token(token):
+			return user
+		return None
+
+	def authenticate_handler(self, handler:SH, allow_guests: bool = True, guest_user: User = None) -> Tuple[Union[User, None], SimpleCookie]:
+		"""
+		Authenticate request handler using cookies.
+		Returns (user, cookie).
+		"""
+		user = self.authenticate_cookie(handler.cookie)
+
+		if not user and allow_guests and guest_user:
+			user = guest_user
+
+		if not user:
+			return (None, clear_user_cookie())
+
+		return (user, create_user_cookie(user))
+
+
+def create_user_cookie(user: User) -> SimpleCookie:
+	"""Create a SimpleCookie for the given user"""
+	cookie = SimpleCookie()
+	cookie["user"] = user.username
+	cookie["user"]["expires"] = 365 * 86400
+	cookie["user"]["path"] = "/"
+
+	cookie["token"] = user.token_hex
+	cookie["token"]["expires"] = 365 * 86400
+	cookie["token"]["path"] = "/"
+
+	cookie["permissions"] = user.permission_pack
+	cookie["permissions"]["expires"] = 365 * 86400
+	cookie["permissions"]["path"] = "/"
+
+	return cookie
+
+
+def clear_user_cookie() -> SimpleCookie:
+	"""Create a SimpleCookie to clear user credentials"""
+	cookie = SimpleCookie()
+	for k in ("user", "token", "permissions"):
+		cookie[k] = ""
+		cookie[k]["expires"] = -1
+		cookie[k]["path"] = "/"
+	return cookie
 
 
 

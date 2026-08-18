@@ -39,6 +39,7 @@ from pyroboxCore import config as CoreConfig
 from pyroboxCore import logger, reload_server
 from pyroboxCore import runner as pyroboxRunner
 from pyroboxCore import tools
+import user_mgmt as u_mgmt
 from UX_Tools import is_file, xpath
 
 __version__ = '0.9.7'
@@ -59,6 +60,7 @@ logger.info(tools.text_box("Server Config", *({i: getattr(cli_args, i)}
 
 
 Sconfig = ServerConfig(cli_args=cli_args)
+SH.server_config = Sconfig
 
 
 ###########################################
@@ -157,83 +159,13 @@ class PostError(Exception):
 	pass
 
 
-def handle_user_cookie(self: SH):
-	cookie = self.cookie
-	# print(cookie)
 
-	def get(k):
-		x = cookie.get(k)
-		if x is not None:
-			return x.value
-		return ""
-	username = get("user")
-	token = get("token")
-
-	self.log_info("COOKIE", username, token)
-
-	if not (username and token):
-		return None
-
-	user = Sconfig.user_handler.get_user(username)
-	# self.log_info("TEMP_USER", user)
-# self.log_info("TEMP_TOKEN_CHECK", user.check_token(token))
-
-	if user:
-		if user.check_token(token):
-			return user
-		else:
-			return None
-	return None
-
-
-def add_user_cookie(user):
-	# add cookie with 1 year expire
-	cookie = SimpleCookie()
-
-	def x(k, v):
-		nonlocal cookie
-		cookie[k] = v
-		cookie[k]["expires"] = 365*86400
-		cookie[k]["path"] = "/"
-
-	x("user", user.username)
-	x("token", user.token_hex)
-	x("permissions", user.permission_pack)
-	return cookie
-
-
-def clear_user_cookie():
-	cookie = SimpleCookie()
-	keys = ("user", "token", "permissions")
-	for k in keys:
-		cookie[k] = ""
-		cookie[k]["expires"] = -1
-		cookie[k]["path"] = "/"
-
-	return cookie
-
-
-def Authorize_user(self: SH):
-	# do cookie stuffs and get user
-	user = handle_user_cookie(self)
-
-	# self.log_info("USER", user)
-
-	if not user and Sconfig.GUESTS:
-		user = Sconfig.guest_id  # default guest user
-
-	if not user:
-		return None, clear_user_cookie()
-
-	cookie = add_user_cookie(user)
-
-	return user, cookie
 
 
 @SH.on_req('GET', hasQ="type")
 def get_page_type(self: SH, *args, **kwargs):
 	"""Return type of the page"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	os_path = kwargs.get('path', '')
 	url_path = kwargs.get('url_path', '')
@@ -304,7 +236,7 @@ def get_version(self: SH, *args, **kwargs):
 @SH.on_req('HEAD', hasQ="qr")
 def get_qr(self: SH, *args, **kwargs):
 	"""Return QR code for easy access"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:
 		return self.redirect("?login")
@@ -331,7 +263,7 @@ def get_qr(self: SH, *args, **kwargs):
 @SH.on_req('HEAD', hasQ="reload")
 def reload(self: SH, *args, **kwargs):
 	# RELOADS THE SERVER BY RE-READING THE FILE, BEST FOR TESTING REMOTELY. VULNERABLE
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:
 		return self.redirect("?login")
@@ -348,7 +280,7 @@ def reload(self: SH, *args, **kwargs):
 @SH.on_req('HEAD', hasQ="shutdown")
 def shutdown(self: SH, *args, **kwargs):
 	# SHUTS DOWN THE SERVER. VULNERABLE
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:
 		return self.redirect("?login")
@@ -362,7 +294,7 @@ def shutdown(self: SH, *args, **kwargs):
 
 @SH.on_req('HEAD', hasQ="admin")
 def admin_page(self: SH, *args, **kwargs):
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:  # guest or not will be handled in Authentication
 		return self.redirect("?login")
@@ -376,7 +308,7 @@ def admin_page(self: SH, *args, **kwargs):
 @SH.on_req('HEAD', hasQ="get_users")
 def get_users(self: SH, *args, **kwargs):
 	"""Send list of users"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:
 		return self.redirect("?login")
@@ -389,7 +321,7 @@ def get_users(self: SH, *args, **kwargs):
 
 @SH.on_req('HEAD', hasQ="update_user_perm")
 def update_user_perm(self: SH, *args, **kwargs):
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:
 		return self.redirect("?login")
@@ -424,7 +356,7 @@ def update_user_perm(self: SH, *args, **kwargs):
 @SH.on_req('HEAD', hasQ="get_user_perm")
 def get_user_perm(self: SH, *args, **kwargs):
 	"""Send permission of a user"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:
 		return self.send_text(pt.login_page(), code=HTTPStatus.UNAUTHORIZED, cookie=cookie)
@@ -447,7 +379,7 @@ def get_user_perm(self: SH, *args, **kwargs):
 @SH.on_req('HEAD', hasQ="add_user")  # added by Admin
 def add_user(self: SH, *args, **kwargs):
 	"""Add a user"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:
 		return self.send_text(pt.login_page(), code=HTTPStatus.UNAUTHORIZED, cookie=cookie)
@@ -474,7 +406,7 @@ def add_user(self: SH, *args, **kwargs):
 @SH.on_req('HEAD', hasQ="delete_user")
 def delete_user(self: SH, *args, **kwargs):
 	"""Delete a user"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:
 		return self.send_text(pt.login_page(), code=HTTPStatus.UNAUTHORIZED, cookie=cookie)
@@ -503,7 +435,7 @@ def delete_user(self: SH, *args, **kwargs):
 @SH.on_req('HEAD', hasQ="update")
 def update(self: SH, *args, **kwargs):
 	"""Check for update and return the latest version"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:  # guest or not will be handled in Authentication
 		return self.send_text(pt.login_page(), code=HTTPStatus.UNAUTHORIZED)
@@ -524,7 +456,7 @@ def update(self: SH, *args, **kwargs):
 @SH.on_req('HEAD', hasQ="size")
 def get_size(self: SH, *args, **kwargs):
 	"""Return size of the file"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:  # guest or not will be handled in Authentication
 		return self.send_text(pt.login_page(), code=HTTPStatus.UNAUTHORIZED, cookie=cookie)
@@ -554,7 +486,7 @@ def get_size(self: SH, *args, **kwargs):
 @SH.on_req('HEAD', hasQ="size_n_count")
 def get_size_n_count(self: SH, *args, **kwargs):
 	"""Return size of the file"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:  # guest or not will be handled in Authentication
 		return self.send_text(pt.login_page(), code=HTTPStatus.UNAUTHORIZED, cookie=cookie)
@@ -585,7 +517,7 @@ def get_size_n_count(self: SH, *args, **kwargs):
 @SH.on_req('HEAD', hasQ=("zip_id", "czip"))
 def get_zip_id(self: SH, *args, **kwargs):
 	"""Return ZIP ID status"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:  # guest or not will be handled in Authentication
 		return self.send_text(pt.login_page(), code=HTTPStatus.UNAUTHORIZED, cookie=cookie)
@@ -632,7 +564,7 @@ def create_zip(self: SH, *args, **kwargs):
 
 	# TODO: Move to Dynamic island
 	"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:  # guest or not will be handled in Authentication
 		return self.send_text(pt.login_page(), code=HTTPStatus.UNAUTHORIZED, cookie=cookie)
@@ -674,7 +606,7 @@ def create_zip(self: SH, *args, **kwargs):
 def get_zip(self: SH, *args, **kwargs):
 	"""Return ZIP file if available
 	Else return progress of the task"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:  # guest or not will be handled in Authentication
 		return self.send_text(pt.login_page(), code=HTTPStatus.UNAUTHORIZED, cookie=cookie)
@@ -742,12 +674,12 @@ def get_zip(self: SH, *args, **kwargs):
 @SH.on_req('HEAD', hasQ="json")
 def send_ls_json(self: SH, *args, **kwargs):
 	"""Send directory listing in JSON format"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:  # guest or not will be handled in Authentication
 		return self.redirect("?login")
 
-	return list_directory_json(self)
+	return list_directory_json(self, user=user)
 
 
 subtitle_location_map = {}
@@ -756,7 +688,7 @@ subtitle_location_map = {}
 @SH.on_req('HEAD', hasQ=("vid", "vid-data"))
 def send_video_data(self: SH, *args, **kwargs):
 	# SEND VIDEO DATA
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:  # guest or not will be handled in Authentication
 		return self.redirect("?login")
@@ -827,7 +759,7 @@ def send_video_data(self: SH, *args, **kwargs):
 @SH.on_req('HEAD', hasQ="sub")
 def send_subtitle(self: SH, *args, **kwargs):
 	# SEND SUBTITLE
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:
 		return self.redirect("?login")
@@ -844,7 +776,7 @@ def send_subtitle(self: SH, *args, **kwargs):
 @SH.on_req('HEAD', hasQ="vid")
 def send_video_page(self: SH, *args, **kwargs):
 	# SEND VIDEO PLAYER
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:  # guest or not will be handled in Authentication
 		return self.redirect("?login")
@@ -881,7 +813,7 @@ def send_video_page(self: SH, *args, **kwargs):
 @SH.on_req('GET', hasQ=("edit", "edit-data"))
 def send_code_data(self: SH, *args, **kwargs):
 	"""Send code file data for editing"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:
 		return self.send_text(pt.login_page(), code=HTTPStatus.UNAUTHORIZED, cookie=cookie)
@@ -1018,7 +950,7 @@ def send_code_data(self: SH, *args, **kwargs):
 @SH.on_req('GET', hasQ="edit")
 def send_code_editor_page(self: SH, *args, **kwargs):
 	"""Send code editor page"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:
 		return self.send_text(pt.login_page(), code=HTTPStatus.UNAUTHORIZED, cookie=cookie)
@@ -1050,7 +982,7 @@ def send_code_editor_page(self: SH, *args, **kwargs):
 @SH.on_req('POST', hasQ="save-file")
 def save_code_file(self: SH, *args, **kwargs):
 	"""Save edited code file"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:
 		return self.send_json({
@@ -1262,7 +1194,7 @@ def send_zip_page_script(self: SH, *args, **kwargs):
 @SH.on_req('HEAD', hasQ="login")
 def login_page(self: SH, *args, **kwargs):
 	"""Send login page"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if user:
 		return self.redirect("/")
@@ -1273,7 +1205,7 @@ def login_page(self: SH, *args, **kwargs):
 @SH.on_req('HEAD', hasQ="signup")
 def signup_page(self: SH, *args, **kwargs):
 	"""Send signup page"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if user:
 		return self.redirect("/")
@@ -1287,19 +1219,19 @@ def signup_page(self: SH, *args, **kwargs):
 @SH.on_req('HEAD', hasQ="logout")
 def logout(self: SH, *args, **kwargs):
 	"""Logout user"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:
 		return self.redirect("/")
 
-	cookie = clear_user_cookie()
+	cookie = u_mgmt.clear_user_cookie()
 	return self.send_text(pt.login_page(), cookie=cookie)
 
 
 @SH.on_req('HEAD', hasQ="folder_data")
 def get_folder_data(self: SH, *args, **kwargs):
 	"""Send folder data"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:
 		return self.send_json({
@@ -1342,7 +1274,7 @@ def get_folder_data(self: SH, *args, **kwargs):
 @SH.on_req('GET')
 def default_get(self: SH, filename=None, *args, **kwargs):
 	"""Serve a GET request."""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	# print("/"*50)
 	# print(user.permission)
@@ -1411,7 +1343,7 @@ def AUTHORIZE_POST(req: SH, post: DPD, post_type=''):
 @SH.on_req('POST', hasQ="do_login")
 def handle_login_post(self: SH, *args, **kwargs):
 	"""Handle login post"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if user:
 		return self.redirect("/")
@@ -1442,7 +1374,7 @@ def handle_login_post(self: SH, *args, **kwargs):
 	if not user.check_password(password):
 		return self.send_json({"status": "failed", "message": "Incorrect password"}, cookie=cookie)
 
-	cookie = add_user_cookie(user)
+	cookie = user.create_cookie()
 
 	return self.send_json({"status": "success", "message": "Login successful, if not Auto-redirecting, kindly Refresh"}, cookie=cookie)
 
@@ -1450,7 +1382,7 @@ def handle_login_post(self: SH, *args, **kwargs):
 @SH.on_req('POST', hasQ="do_signup")
 def handle_signup_post(self: SH, *args, **kwargs):
 	"""Handle signup post"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if user:
 		return self.redirect("/")
@@ -1485,7 +1417,7 @@ def handle_signup_post(self: SH, *args, **kwargs):
 	if not user:
 		return self.send_json({"status": "failed", "message": "Failed to create user"}, cookie=cookie)
 
-	cookie = add_user_cookie(user)
+	cookie = user.create_cookie()
 
 	return self.send_json({"status": "success", "message": "Signup successful"}, cookie=cookie)
 
@@ -1494,7 +1426,7 @@ def handle_signup_post(self: SH, *args, **kwargs):
 @SH.on_req('POST', hasQ="upload")
 def upload(self: SH, *args, **kwargs):
 	"""GET Uploaded files"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:  # guest or not will be handled in Authentication
 		return self.redirect("?login")
@@ -1626,7 +1558,7 @@ def upload(self: SH, *args, **kwargs):
 @SH.on_req('POST', hasQ="del-f")
 def del_2_recycle(self: SH, *args, **kwargs):
 	"""Move 2 recycle bin"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:  # guest or not will be handled in Authentication
 		return self.send_text(pt.login_page(), code=HTTPStatus.UNAUTHORIZED, cookie=cookie)
@@ -1683,7 +1615,7 @@ def del_2_recycle(self: SH, *args, **kwargs):
 @SH.on_req('POST', hasQ="del-p")
 def del_permanently(self: SH, *args, **kwargs):
 	"""DELETE files permanently"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:  # guest or not will be handled in Authentication
 		return self.send_text(pt.login_page(), code=HTTPStatus.UNAUTHORIZED, cookie=cookie)
@@ -1732,7 +1664,7 @@ def del_permanently(self: SH, *args, **kwargs):
 @SH.on_req('POST', hasQ="rename")
 def rename_content(self: SH, *args, **kwargs):
 	"""Rename files"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:  # guest or not will be handled in Authentication
 		return self.send_text(pt.login_page(), code=HTTPStatus.UNAUTHORIZED, cookie=cookie)
@@ -1784,7 +1716,7 @@ def rename_content(self: SH, *args, **kwargs):
 @SH.on_req('POST', hasQ="info")
 def get_info(self: SH, *args, **kwargs):
 	"""Get files permanently"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:  # guest or not will be handled in Authentication
 		return self.send_text(pt.login_page(), code=HTTPStatus.UNAUTHORIZED, cookie=cookie)
@@ -1908,7 +1840,7 @@ tr:nth-child(even) {
 @SH.on_req('POST', hasQ="new_folder")
 def new_folder(self: SH, *args, **kwargs):
 	"""Create new folder"""
-	user, cookie = Authorize_user(self)
+	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:  # guest or not will be handled in Authentication
 		return self.send_text(pt.login_page(), code=HTTPStatus.UNAUTHORIZED)

@@ -542,6 +542,8 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
 	# use allow_CORS to add a method to the list (and Override ALL)
 	# DEFAULT: None
 
+	cookie: Union[SimpleCookie, None] = None
+
 
 
 	@classmethod
