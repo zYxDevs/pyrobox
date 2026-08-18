@@ -6,16 +6,19 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
 	from pyroboxCore import Config
 
+# Guest upload password default (owned by pyrobox app layer, not pyroboxCore)
+DEFAULT_UPLOAD_PASSWORD = "SECret"
+
 
 def add_args(config:Config):
 	if config._custom_cli_args_added:
 		return
 	config.parser.add_argument('--password', '-k',
-							default=config.PASSWORD,
+							default=DEFAULT_UPLOAD_PASSWORD,
 							type=str,
 							help='[Value] Upload Password (default: %(default)s)',
 							nargs="?",
-							const=config.PASSWORD)
+							const=DEFAULT_UPLOAD_PASSWORD)
 
 
 

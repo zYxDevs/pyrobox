@@ -4,6 +4,12 @@ requires = [
 ]
 build-backend = "setuptools.build_meta"
 
+[tool.pytest.ini_options]
+# Real suite only; scratch / live-served fixtures under test-dir are not tests.
+testpaths = ["dev_src/tests"]
+pythonpath = ["dev_src"]
+norecursedirs = ["test-dir", ".*", "build", "dist", "venv", ".venv", "__pycache__"]
+
 [tool.ruff]
 # Dev tree only; archived / shipped trees are out of scope for this pass.
 exclude = [

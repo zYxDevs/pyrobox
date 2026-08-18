@@ -26,6 +26,8 @@ class ServerConfig():
 		self.name = cli_args.server_name
 		self.admin_username = cli_args.admin_id
 		self.admin_password = cli_args.admin_pass
+		# Guest/anonymous upload gate (CLI --password); not an account password
+		self.PASSWORD = getattr(cli_args, 'password', 'SECret')
 
 		self.uDB = PickleTable()
 		self.configDB = PickleTable()

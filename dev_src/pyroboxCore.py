@@ -145,22 +145,10 @@ class Config:
 		# DEFAULT PORT TO LAUNCH SERVER
 		self.port = 6969  # DEFAULT PORT TO LAUNCH SERVER
 
-		# UPLOAD PASSWORD SO THAT ANYONE RANDOM CAN'T UPLOAD
-		# CAN BE CHANGED BY USING --password NEW_PASSWORD
-		self.PASSWORD = "SECret"
-
 		# LOGGING
 		self.log_location = "./"  # fallback log_location = "./"
-		# if you want to see some important LOG in browser, may contain your important information
-		self.allow_web_log = True
 		self.write_log = False  # if you want to write log to file
 		self.log_extra = True
-
-		# ZIP FEATURES
-		self.default_zip = "zipfile"  # or "zipfile" to use python built in zip module
-
-		# CHECK FOR MISSING REQUIREMENTS
-		self.run_req_check = True
 
 		# FILE INFO
 		self.MAIN_FILE = os.path.realpath(__file__)
@@ -174,9 +162,8 @@ class Config:
 		self.dev_mode = DEV_MODE
 		self.reload = False
 
-		self.disabled_func = {
-			"reload": False,
-		}
+		# Extensible feature-flag bag; apps fill keys (e.g. zip, upload)
+		self.disabled_func = {}
 
 		# TEMP FILE MAPPING
 		self.temp_files = set()
@@ -185,9 +172,6 @@ class Config:
 
 		# CLEAN TEMP FILES ON EXIT
 		atexit.register(self.clear_temp)
-
-		# ASSET MAPPING
-		self.file_list = {}
 
 		# COMMANDLINE ARGUMENTS PARSER
 		self.parser = argparse.ArgumentParser(add_help=False)
@@ -207,7 +191,7 @@ class Config:
 				<p>Error code: ${code}</p>
 				<p>Message: ${message}</p>
 				<p>Error code explanation: ${code} - ${explain}</p>
-				<h3>PyroBox Version: ${version}</h3>
+				<h3>Server Version: ${version}</h3>
 			</body>
 		</html>
 		""")
@@ -304,8 +288,6 @@ class Config:
 config = Config()
 
 
-def get_log_level():
-	argparse.add_argument('--log', '-l', default='INFO', help='Log level')
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: \n%(message)s')
 
 logger = logging.getLogger(__name__)

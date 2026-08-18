@@ -18,6 +18,7 @@ def make_cli_args(**overrides):
 		server_name=None,
 		admin_id=None,
 		admin_pass=None,
+		password='SECret',
 		no_guest_allowed=False,
 		guest_allowed=True,
 		no_upload=False,

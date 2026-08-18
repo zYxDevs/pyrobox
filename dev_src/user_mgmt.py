@@ -31,7 +31,7 @@ from pyroboxCore import logger
 from pyroDB3 import PickleTable
 from data_types import LimitedDict
 
-# Loads user database. Database is plaintext but stores passwords as a hash salted by config.PASSWORD
+# Loads user database. Passwords are hashed with User_handler.common_salt.
 
 
 __all__ = [

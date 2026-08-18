@@ -32,14 +32,12 @@ class TestAnonymousServerPerms:
 		assert cookie['user'].value == 'Guest'
 
 	def test_guest_vs_member_password_rules(self, anonymous_config):
-		"""Guests use CoreConfig.PASSWORD for uploads; members use account password."""
-		from pyroboxCore import config as CoreConfig
-
+		"""Guests use ServerConfig.PASSWORD for uploads; members use account password."""
 		guest = anonymous_config.guest_id
 		member = anonymous_config.user_handler.create_user('mem', 'acct-pass')
 
 		assert not guest.MEMBER
-		assert CoreConfig.PASSWORD == 'SECret'
+		assert anonymous_config.PASSWORD == 'SECret'
 
 		assert member.MEMBER
 		assert member.check_password('acct-pass')
