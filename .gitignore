@@ -1,6 +1,11 @@
 **/.private
 **/log.txt
+# Ignore ad-hoc *test* scratch paths, but keep the real suites/fixtures tracked
 **/*test*
+!dev_src/tests/
+!dev_src/tests/**
+!dev_src/test-dir/
+!dev_src/test-dir/**
 *.pdb
 *.bak
 **/*.bkp.*

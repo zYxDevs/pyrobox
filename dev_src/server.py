@@ -8,11 +8,11 @@
 import datetime
 import hashlib
 # import subprocess
+import importlib.util
 import json
 import os
 # import sys
 import posixpath
-import re
 import shutil
 import threading
 import traceback
@@ -20,7 +20,6 @@ import urllib.parse
 import urllib.request
 import uuid
 from http import HTTPStatus
-from http.cookies import SimpleCookie
 
 import _page_templates as pt
 from _arg_parser import add_args
@@ -36,7 +35,12 @@ from pyrobox_ServerHost import ServerHost as SH
 from pyroboxCore import DealPostData as DPD
 from pyroboxCore import __version__ as pyroboxCore_version
 from pyroboxCore import config as CoreConfig
-from pyroboxCore import logger, reload_server
+from pyroboxCore import (
+	directory_url_has_trailing_slash,
+	logger,
+	reload_server,
+	validate_client_relpath,
+)
 from pyroboxCore import runner as pyroboxRunner
 from pyroboxCore import tools
 import user_mgmt as u_mgmt
@@ -102,9 +106,7 @@ if not CoreConfig.disabled_func.get("send2trash"):
 
 
 if not CoreConfig.disabled_func.get("natsort"):
-	try:
-		import natsort
-	except Exception:
+	if importlib.util.find_spec("natsort") is None:
 		CoreConfig.disabled_func["natsort"] = True
 		logger.warning(
 			"natsort not found, falling back to default sorting. Install it using `pip install natsort`")
@@ -430,9 +432,9 @@ def add_user(self: SH, *args, **kwargs):
 	if permission is not None:
 		try:
 			new_user.set_permission_pack(int(permission))
-		except:
+		except (TypeError, ValueError):
 			pass
-			
+
 	if allowed_paths is not None:
 		new_user.set_allowed_paths(allowed_paths)
 
@@ -900,7 +902,7 @@ def send_code_data(self: SH, *args, **kwargs):
 					detected_line_ending = 'CRLF'
 				else:
 					detected_line_ending = 'LF'
-		except:
+		except OSError:
 			detected_line_ending = 'LF'  # default if detection fails
 		
 		# For read-only display of large files, limit to 16KB
@@ -1140,7 +1142,7 @@ def save_code_file(self: SH, *args, **kwargs):
 			if os.path.exists(backup_path):
 				try:
 					shutil.copy2(backup_path, os_path)
-				except:
+				except OSError:
 					pass
 			raise write_error
 
@@ -1334,7 +1336,8 @@ def default_get(self: SH, filename=None, *args, **kwargs):
 
 	if os.path.isdir(os_path):
 		parts = urllib.parse.urlsplit(self.path)
-		if not parts.path.endswith('/'):
+		# Match CPython http.server: treat %2f / %2F as an existing trailing slash
+		if not directory_url_has_trailing_slash(parts.path):
 			# redirect browser - doing basically what apache does
 			self.send_response(code=HTTPStatus.MOVED_PERMANENTLY)
 			new_parts = (parts[0], parts[1], parts[2] + '/',
@@ -1481,7 +1484,6 @@ def upload(self: SH, *args, **kwargs):
 	if user.NOPERMISSION or (not user.UPLOAD):
 		return self.send_txt("Upload not allowed", code=HTTPStatus.SERVICE_UNAVAILABLE, cookie=cookie)
 
-	os_path = kwargs.get('path', '')
 	url_path = kwargs.get('url_path', '')
 
 	post = DPD(self)
@@ -1523,10 +1525,8 @@ def upload(self: SH, *args, **kwargs):
 		return self.send_txt("Incorrect password", code=HTTPStatus.UNAUTHORIZED, cookie=cookie)
 
 	while post.remainbytes > 0:
-		print("Remaining bytes: ", post.remainbytes)
 		# reads the next line and returns the file name/relative path
 		fn = form.get_file_name(ignore_folder=True)
-		print("File name: ", fn)
 		if fn is None:  # folder
 			post.skip(4)  # skip the next 3 lines and the boundary
 			continue
@@ -1534,38 +1534,51 @@ def upload(self: SH, *args, **kwargs):
 		if not fn or not fn.strip():
 			return self.send_error(code=HTTPStatus.BAD_REQUEST, message="Can't find out file name...", cookie=cookie)
 
-		fn = fn.strip().replace('\\', '/').strip('/')
+		# Reject absolute / drive / traversal names; never os.path.join with raw fn
+		# (join discards the served root when fn is absolute).
+		fn = validate_client_relpath(fn, allow_leading_slash=False)
+		if fn is None:
+			logger.warning(f"Invalid upload filename by {uid}")
+			upload_handler.kill()
+			return self.send_txt("Invalid Path", code=HTTPStatus.BAD_REQUEST, cookie=cookie)
 
-		# relative path (must be url path with / separator)
-		rltv_path = xpath(url_path, fn)
-
+		rltv_path = posixpath.join(url_path, fn)
 		if not self.path_safety_check(fn, rltv_path):
 			logger.warning(f"Invalid Path: {fn} - {rltv_path} by {uid}")
 			upload_handler.kill()
 			return self.send_txt("Invalid Path:  " + rltv_path, code=HTTPStatus.BAD_REQUEST, cookie=cookie)
 
-		os_f_path = xpath(os_path, fn)
+		os_f_path = self.resolve_child_path(url_path, fn)
+		if not os_f_path:
+			logger.warning(f"Upload path escaped root: {fn} by {uid}")
+			upload_handler.kill()
+			return self.send_txt("Invalid Path:  " + rltv_path, code=HTTPStatus.BAD_REQUEST, cookie=cookie)
 
 		# make directory if not exists
 		f_dir = os.path.dirname(os_f_path)
+		if not self.path_is_under_directory(f_dir):
+			upload_handler.kill()
+			return self.send_txt("Invalid Path:  " + rltv_path, code=HTTPStatus.BAD_REQUEST, cookie=cookie)
+
 		try:
 			os.makedirs(f_dir, exist_ok=True)
 		except OSError:
 			return self.send_txt("Can't create directory to write, do you have permission to write?", code=HTTPStatus.SERVICE_UNAVAILABLE, cookie=cookie)
 
-		# temp_fn = xpath(os_path, ".LStemp-"+ fn +'.tmp')
 		real_fn = os.path.basename(fn)
-		temp_fn = xpath(f_dir, ".LStemp-" + real_fn + '.tmp')
+		temp_fn = os.path.join(f_dir, ".LStemp-" + real_fn + '.tmp')
+		if not self.path_is_under_directory(temp_fn):
+			upload_handler.kill()
+			return self.send_txt("Invalid Path:  " + rltv_path, code=HTTPStatus.BAD_REQUEST, cookie=cookie)
 		CoreConfig.temp_files.add(temp_fn)
 
 		line = post.get()  # content type
 		line = post.get()  # line gap
 
-		print("Handling file: ", fn)
-
 		# ORIGINAL FILE STARTS FROM HERE
+		out = None
 		try:
-			out = open(temp_fn, 'wb', buffering=Sconfig.max_buffer_size)
+			out = open(temp_fn, 'wb', buffering=Sconfig.max_buffer_size)  # noqa: SIM115 — ownership passed to upload worker
 			preline = post.get()
 			while post.remainbytes > 0 and not upload_handler.error:
 				line = post.get()
@@ -1584,6 +1597,7 @@ def upload(self: SH, *args, **kwargs):
 					preline = line
 
 			upload_handler.upload(out, 's', (os_f_path, user.MODIFY))
+			out = None  # ownership transferred to upload worker
 
 			if upload_handler.error and not upload_handler.active:
 				remove_from_temp(temp_fn)
@@ -1592,6 +1606,9 @@ def upload(self: SH, *args, **kwargs):
 		except (IOError, OSError):
 			traceback.print_exc()
 			return self.send_txt("Can't create file to write, do you have permission to write?", code=HTTPStatus.SERVICE_UNAVAILABLE, cookie=cookie)
+		finally:
+			if out is not None and not out.closed:
+				out.close()
 
 	upload_handler.active = False  # will take no further inputs
 	upload_thread.join()
@@ -1637,7 +1654,9 @@ def del_2_recycle(self: SH, *args, **kwargs):
 	if not self.path_safety_check(filename, rel_path):
 		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
 
-	os_f_path = self.translate_path(xpath(url_path, filename))
+	os_f_path = self.resolve_child_path(url_path, filename)
+	if not os_f_path:
+		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
 
 	self.log_warning(f'<-send2trash-> {os_f_path} by {[uid]}')
 
@@ -1689,7 +1708,9 @@ def del_permanently(self: SH, *args, **kwargs):
 	if not self.path_safety_check(filename, rel_path):
 		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
 
-	os_f_path = self.translate_path(xpath(url_path, filename))
+	os_f_path = self.resolve_child_path(url_path, filename)
+	if not os_f_path:
+		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
 
 	self.log_warning(f'Perm. DELETED {os_f_path} by {[uid]}')
 
@@ -1746,8 +1767,10 @@ def rename_content(self: SH, *args, **kwargs):
 	if not self.path_safety_check(filename, new_name, rel_path, new_rel_path):
 		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
 
-	os_f_path = self.translate_path(xpath(url_path, filename))
-	os_new_f_path = self.translate_path(xpath(url_path, new_name))
+	os_f_path = self.resolve_child_path(url_path, filename)
+	os_new_f_path = self.resolve_child_path(url_path, new_name)
+	if not os_f_path or not os_new_f_path:
+		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
 
 	self.log_warning(f'Renamed "{os_f_path}" to "{os_new_f_path}" by {[uid]}')
 
@@ -1769,7 +1792,6 @@ def get_info(self: SH, *args, **kwargs):
 	if user.NOPERMISSION:
 		return self.send_json({"status": False, "head": "Failed", "body": "You have no permission to view."}, cookie=cookie)
 
-	os_path = kwargs.get('path', '')
 	url_path = kwargs.get('url_path', '')
 
 	script = None
@@ -1794,7 +1816,9 @@ def get_info(self: SH, *args, **kwargs):
 	if not self.path_safety_check(filename, rel_path):
 		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
 
-	os_f_path = self.translate_path(posixpath.join(url_path, filename))
+	os_f_path = self.resolve_child_path(url_path, filename)
+	if not os_f_path:
+		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
 
 	self.log_warning(f'Info Checked "{os_f_path}" by: {[uid]}')
 
@@ -1877,7 +1901,6 @@ def new_folder(self: SH, *args, **kwargs):
 	if user.NOPERMISSION or (not user.MODIFY):
 		return self.send_json({"status": False, "head": "Failed", "body": "Permission denied."}, cookie=cookie)
 
-	os_path = kwargs.get('path', '')
 	url_path = kwargs.get('url_path', '')
 
 	post = DPD(self)
@@ -1898,7 +1921,9 @@ def new_folder(self: SH, *args, **kwargs):
 	if not self.path_safety_check(filename, rel_path):
 		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
 
-	os_f_path = self.translate_path(posixpath.join(url_path, filename))
+	os_f_path = self.resolve_child_path(url_path, filename)
+	if not os_f_path:
+		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
 
 	self.log_warning(f'New Folder Created "{os_f_path}" by: {[uid]}')
 

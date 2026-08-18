@@ -26,7 +26,7 @@ import email.utils
 import datetime
 import argparse
 from string import Template
-from typing import List, Union
+from typing import List, Optional, Union
 from queue import Queue
 import logging
 import atexit
@@ -50,6 +50,85 @@ __all__ = [
 endl = "\n"
 T = t = true = True  # too lazy to type
 F = f = false = False  # too lazy to type
+
+
+# Keep these helpers in pyroboxCore.py: this module is also distributed as a
+# standalone, drop-in HTTP server and must not import other project files.
+BAD_FILENAME_CHARS = re.compile(r'[:*?"<>|\x00]')
+_DRIVE_ABS = re.compile(r'^[A-Za-z]:')
+
+
+def path_is_under_directory(
+	base_dir: str,
+	target_path: str,
+	*,
+	resolve_symlinks: bool = False,
+) -> bool:
+	"""Return True if target_path resolves inside base_dir."""
+	if not base_dir or not target_path:
+		return False
+
+	if resolve_symlinks:
+		base = os.path.realpath(base_dir)
+		target = os.path.realpath(target_path)
+	else:
+		base = os.path.abspath(base_dir)
+		target = os.path.abspath(target_path)
+
+	try:
+		return os.path.commonpath([base, target]) == base
+	except ValueError:
+		# Different drives / invalid path mix on Windows
+		return False
+
+
+def _is_unc_or_drive(normalized: str) -> bool:
+	return normalized.startswith('//') or bool(_DRIVE_ABS.match(normalized))
+
+
+def validate_client_relpath(
+	path: Optional[str],
+	*,
+	allow_leading_slash: bool = False,
+) -> Optional[str]:
+	"""Validate a client path and return its normalized relative form."""
+	if path is None or not isinstance(path, str):
+		return None
+
+	original = path.strip()
+	if not original:
+		return None
+
+	normalized = original.replace('\\', '/')
+	if _is_unc_or_drive(normalized):
+		return None
+
+	if normalized.startswith('/'):
+		if not allow_leading_slash:
+			return None
+	elif os.path.isabs(normalized) or os.path.isabs(original):
+		return None
+
+	normalized = normalized.strip('/')
+	if not normalized:
+		return None
+
+	parts = []
+	for part in normalized.split('/'):
+		if not part or part in ('.', '..'):
+			return None
+		if os.path.dirname(part) or _is_unc_or_drive(part):
+			return None
+		if BAD_FILENAME_CHARS.search(part):
+			return None
+		parts.append(part)
+
+	return '/'.join(parts)
+
+
+def directory_url_has_trailing_slash(url_path: str) -> bool:
+	"""True for a literal or URL-encoded trailing slash."""
+	return bool(url_path) and url_path.endswith(('/', '%2f', '%2F'))
 
 
 class Config:
@@ -1351,7 +1430,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 	# 	self.send_error(code=HTTPStatus.BAD_REQUEST, message="Bad request.")
 
 	@staticmethod
-	def on_req(method='', url='', hasQ=(), QV={}, fragent='', url_regex='', func=null):
+	def on_req(method='', url='', hasQ=(), QV=None, fragent='', url_regex='', func=null):
 		'''called when request is received
 		type: GET, POST, HEAD, ...
 		url: url (must start with /)
@@ -1375,6 +1454,8 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 		# FIXING TYPE ISSUE
 		if isinstance(hasQ, str):
 			hasQ = (hasQ,)
+		if QV is None:
+			QV = {}
 
 		if url == '' and url_regex == '':
 			url_regex = '.*'
@@ -1387,42 +1468,42 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 		return decorator
 
 	@staticmethod
-	def on_GET(url='', hasQ=(), QV={}, fragent='', url_regex=''):
+	def on_GET(url='', hasQ=(), QV=None, fragent='', url_regex=''):
 		'''called when GET request is received'''
 		self = __class__
 
 		return self.on_req(method='GET', url=url, hasQ=hasQ, QV=QV, fragent=fragent, url_regex=url_regex)
 
 	@staticmethod
-	def on_POST(url='', hasQ=(), QV={}, fragent='', url_regex=''):
+	def on_POST(url='', hasQ=(), QV=None, fragent='', url_regex=''):
 		'''called when POST request is received'''
 		self = __class__
 
 		return self.on_req(method='POST', url=url, hasQ=hasQ, QV=QV, fragent=fragent, url_regex=url_regex)
 
 	@staticmethod
-	def on_HEAD(url='', hasQ=(), QV={}, fragent='', url_regex=''):
+	def on_HEAD(url='', hasQ=(), QV=None, fragent='', url_regex=''):
 		'''called when HEAD request is received'''
 		self = __class__
 
 		return self.on_req(method='HEAD', url=url, hasQ=hasQ, QV=QV, fragent=fragent, url_regex=url_regex)
 
 	@staticmethod
-	def on_OPTIONS(url='', hasQ=(), QV={}, fragent='', url_regex=''):
+	def on_OPTIONS(url='', hasQ=(), QV=None, fragent='', url_regex=''):
 		'''called when OPTIONS request is received'''
 		self = __class__
 
 		return self.on_req(method='OPTIONS', url=url, hasQ=hasQ, QV=QV, fragent=fragent, url_regex=url_regex)
 
 	@staticmethod
-	def on_DELETE(url='', hasQ=(), QV={}, fragent='', url_regex=''):
+	def on_DELETE(url='', hasQ=(), QV=None, fragent='', url_regex=''):
 		'''called when DELETE request is received'''
 		self = __class__
 
 		return self.on_req(method='DELETE', url=url, hasQ=hasQ, QV=QV, fragent=fragent, url_regex=url_regex)
 
 	@staticmethod
-	def on_PUT(url='', hasQ=(), QV={}, fragent='', url_regex=''):
+	def on_PUT(url='', hasQ=(), QV=None, fragent='', url_regex=''):
 		'''called when PUT request is received'''
 		self = __class__
 
@@ -1430,7 +1511,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
 
 	@staticmethod
-	def alt_directory(dir, method='', url='', hasQ=(), QV={}, fragent='', url_regex='', cache_control="", cookie:Union[SimpleCookie, str]=None):
+	def alt_directory(dir, method='', url='', hasQ=(), QV=None, fragent='', url_regex='', cache_control="", cookie:Union[SimpleCookie, str]=None):
 		"""
 		alternative directory handler (only handles GET and HEAD request for files)
 		"""
@@ -1468,7 +1549,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 		return super().log_error(*args, **kwargs)
 
 
-	def test_req(self, url='', hasQ=(), QV={}, fragent='', url_regex=''):
+	def test_req(self, url='', hasQ=(), QV=None, fragent='', url_regex=''):
 		'''test if request is matched'
 
 		args:
@@ -1480,6 +1561,8 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
 
 		'''
+		if QV is None:
+			QV = {}
 		if url_regex and not re.search("^"+url_regex+'$', self.url_path):
 				return False
 		if url and url != self.url_path:
@@ -1794,7 +1877,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 			if ctype == "application/x-brotli" and "br" in self.headers.get("Accept-Encoding", ""):
 				C_encoding = "br"
 
-			file = open(path, 'rb')
+			file = open(path, 'rb')  # noqa: SIM115 — caller closes after response copy
 			fs = os.fstat(file.fileno())
 
 			file_len = fs[6]
@@ -1944,9 +2027,18 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 		"""
 		return string.replace(self.directory, "/", times)
 
+	def path_is_under_directory(self, target_path: str, *, resolve_symlinks: bool = False) -> bool:
+		"""Return True if target_path stays inside self.directory."""
+		return path_is_under_directory(
+			self.directory, target_path, resolve_symlinks=resolve_symlinks)
+
 	def path_safety_check(self, paths: Union[str, List], *more_paths: Union[str, List]):
 		"""Check if paths are safe and do not contain directory traversal attempts.
-		
+
+		URL-style paths may start with '/'; those leading slashes are treated as
+		web-root relative (not filesystem-absolute). Drive letters, UNC paths,
+		'.'/'..' segments, and escapes outside self.directory are rejected.
+
 		Args:
 			paths: A string or list of paths to check.
 			more_paths: Additional paths to check.
@@ -1956,6 +2048,8 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 		"""
 		if isinstance(paths, str):
 			paths = [paths]  # Convert single string to list
+		else:
+			paths = list(paths)
 
 		# Process additional paths
 		for path in more_paths:
@@ -1968,45 +2062,37 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
 		if not all(isinstance(path, str) for path in paths):
 			raise TypeError("All paths must be strings")
-			
 
-		# Base directory (change this as needed)
-		base_dir = os.path.abspath(self.directory)  # Assuming self.base_directory exists
-		BAD_FILENAME_CHARS = re.compile(r'[:*?"<>|]')  # Windows-illegal characters
+		base_dir = os.path.abspath(self.directory)
 
 		for path in paths:
-			if not path or not path.strip():  # False on empty paths
-				# logger.info(f"Empty path: {path}")
+			rel = validate_client_relpath(path, allow_leading_slash=True)
+			if rel is None:
 				return False
 
-			path = path.strip().replace('\\', '/').strip('/')  # Remove leading/trailing whitespace
-
-			for part in path.split('/'):
-				if part in ('..', '.'):
-					# logger.info(f"Path traversal attempt: {path}")
-					return False
-
-			# Check for illegal characters
-			if BAD_FILENAME_CHARS.search(path):
-				# logger.info(f"Illegal characters in path: {path}")
+			abs_path = os.path.abspath(os.path.join(base_dir, *rel.split('/')))
+			if not path_is_under_directory(base_dir, abs_path, resolve_symlinks=False):
 				return False
 
-			# Normalize the path to an absolute path
-			abs_path = os.path.abspath(os.path.join(base_dir, path))
+		return True
 
-			# Check if the resolved path is inside the base directory
-			if not abs_path.startswith(base_dir):
-				# logger.info(f"Path escapes base directory: {path}")
-				# logger.info(f"Base directory: {base_dir}")
-				# logger.info(f"Resolved path: {abs_path}")
-				return False  # Reject any path that escapes the base directory
+	def resolve_child_path(self, url_path: str, filename: str):
+		"""Map a client filename under url_path to a filesystem path inside the root.
 
+		Returns the absolute filesystem path, or None if the name is unsafe /
+		would escape the served directory. Uses translate_path (same rules as GET)
+		instead of os.path.join, which discards the base when filename is absolute.
+		"""
+		rel = validate_client_relpath(filename, allow_leading_slash=False)
+		if rel is None:
+			return None
 
-			# check for bad characters
-
-		return True  # If all checks pass, path is safe
-
-
+		# Build a URL path then translate with stdlib-equivalent rules
+		joined = posixpath.join(url_path or '/', rel)
+		fs_path = self.translate_path(joined)
+		if not path_is_under_directory(self.directory, fs_path, resolve_symlinks=False):
+			return None
+		return fs_path
 
 	def translate_path(self, path):
 		"""Translate a /-separated PATH to the local filename syntax.
@@ -2020,7 +2106,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 		path = path.split('?', 1)[0]
 		path = path.split('#', 1)[0]
 		# Don't forget explicit trailing slash when normalizing. Issue17324
-		trailing_slash = path.rstrip().endswith('/')
+		trailing_slash = path.endswith('/')
 
 		try:
 			path = urllib.parse.unquote(path, errors='surrogatepass')
@@ -2038,6 +2124,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 			path = os.path.join(path, word)
 		if trailing_slash:
 			path += '/'
+			return path
 
 		return os.path.normpath(path)  # fix OS based path issue
 
@@ -2579,7 +2666,7 @@ def get_ip(bind=None):
 		# doesn't even have to be reachable
 		s.connect(('10.255.255.255', 1))
 		IP = s.getsockname()[0]
-	except:
+	except OSError:
 		try:
 			if config.OS == "Android":
 				IP = s.connect(("192.168.43.1",  1))

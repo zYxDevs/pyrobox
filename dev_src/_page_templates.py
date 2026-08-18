@@ -5,7 +5,6 @@ __all__ = [
 	"script_global",
 	"upload_form",
 	"file_list_script",
-	"video_page",
 	"zip_script",
 	"error_page",
 	"theme_script",

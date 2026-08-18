@@ -3,3 +3,29 @@ requires = [
   "setuptools>=61.0"
 ]
 build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+# Dev tree only; archived / shipped trees are out of scope for this pass.
+exclude = [
+  "src",
+  "local_server (py~3.4).py",
+  "dev_src/test-dir",
+  "**/__pycache__",
+  ".venv",
+  "venv",
+]
+target-version = "py37"
+line-length = 120
+
+[tool.ruff.lint]
+# Prefer Union/Optional over | for 3.7; keep serious checks only.
+select = [
+  "E9",   # runtime syntax
+  "F63",  # invalid print/assert
+  "F7",   # syntax errors
+  "F82",  # undefined names
+  "E71",  # comparison to True/False/None
+]
+ignore = [
+  "E741",  # ambiguous variable names (legacy code)
+]

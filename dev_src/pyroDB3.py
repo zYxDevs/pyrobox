@@ -740,7 +740,7 @@ class PyroDB(object):
 		try:
 			signal.signal(signal.SIGTERM, sigterm_handler)
 			# ValueError: signal only works in main thread of the main interpreter
-		except:
+		except (ValueError, OSError, AttributeError):
 			atexit.register(sigterm_handler)
 
 	def unlink(self):
@@ -2957,7 +2957,7 @@ class PyroTable(dict):
 			try:
 				return key(row)
 			except Exception as e:
-				TypeError(f"Error applying key function: {e}")
+				raise TypeError(f"Error applying key function: {e}")
 
 		def build_sort_key(row: Union[dict, "_PyroTRow"]):
 			if column:
@@ -3256,7 +3256,7 @@ class PyroTable(dict):
 		return output.getvalue()
 
 	def _load_csv(self, filepath=None, iostream=None, csv_str=None,
-				 header: Union[bool, Literal["auto"]] = True, ignore_none=False, ignore_new_headers=False, on_file_not_found='error', AD=True):
+				 header: Union[bool, str] = True, ignore_none=False, ignore_new_headers=False, on_file_not_found='error', AD=True):
 		columns_names = self.column_names_set
 
 		def add_row(row, columns):
@@ -3389,7 +3389,7 @@ class PyroTable(dict):
 
 	@threadsafe_decorator
 	def load_csv(self, filepath=None, iostream=None, csv_str=None,
-				 header: Union[bool, Literal["auto"]] = True, ignore_none=False, ignore_new_headers=False, on_file_not_found='error', AD=True):
+				 header: Union[bool, str] = True, ignore_none=False, ignore_new_headers=False, on_file_not_found='error', AD=True):
 		"""
 		Load a csv file to the table
 		- WILL OVERWRITE THE EXISTING DATA (To append, make a new table and extend)

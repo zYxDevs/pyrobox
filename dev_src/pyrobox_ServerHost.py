@@ -1,7 +1,7 @@
 import argparse
 from http import HTTPStatus
 import os
-from typing import Union
+from typing import Tuple, Union
 import urllib.parse
 
 from _fs_utils import get_titles, dir_navigator, reverse_humanbytes
@@ -86,7 +86,7 @@ class ServerConfig():
 			_admin = self.user_handler.get_user(self.admin_username, temp=True)
 
 			if _admin:
-				if not _admin.is_admin:
+				if not _admin.is_admin():
 					raise ValueError(tools.text_box("Provided username is not an admin"))
 				if not _admin.check_password(self.admin_password):
 					raise ValueError(tools.text_box("Admin password is incorrect"))
@@ -164,8 +164,10 @@ class ServerConfig():
 		if self.DefaultPerms["value"].get("guest", None):
 			self.guest_perms = User.unpack_permission_to_list(self.DefaultPerms["value"]["guest"])
 		elif not self.name:
-			self.guest_perms = self.member_perms # if no account mode, guest is member
-			self.guest_perms.remove(permits.MEMBER) # remove member permission
+			# Copy list — do not alias member_perms (remove would mutate both)
+			self.guest_perms = list(self.member_perms)
+			if permits.MEMBER in self.guest_perms:
+				self.guest_perms.remove(permits.MEMBER)
 
 		else:
 			self.guest_perms = [
@@ -203,6 +205,11 @@ class ServerConfig():
 			self.DefaultPerms["value"]["admin"] = User.pack_permission_from_list(self.admin_perms)
 			self.DefaultPerms["value"]["guest"] = User.pack_permission_from_list(self.guest_perms)
 
+
+
+	def get_users(self):
+		"""Return usernames from the user DB (admin UI)."""
+		return self.uDB.get_column("username")
 
 
 	def authorize_user(self, handler: 'ServerHost') -> Tuple[Union[User, None], SimpleCookie]:

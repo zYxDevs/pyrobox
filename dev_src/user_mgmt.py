@@ -15,7 +15,12 @@ if TYPE_CHECKING:
 def normalize(p: str) -> str:
 	p = unquote(p)                    # %2e%2e -> ..
 	p = p.replace("\\", "/")          # windows
-	p = posixpath.normpath("/" + p)   # resolves .. and //
+	if not p.startswith("/"):
+		p = "/" + p
+	p = posixpath.normpath(p)         # resolves .. and //
+	# Windows posixpath can leave a leading '//' (UNC-style); URL ACLs are not UNC
+	if p.startswith("//"):
+		p = "/" + p.lstrip("/")
 	return p.rstrip("/") or "/"
 
 
@@ -23,7 +28,7 @@ from http.cookies import SimpleCookie
 import binascii
 
 from pyroboxCore import logger
-from pyroDB3 import PickleTable, _PickleTRow
+from pyroDB3 import PickleTable
 from data_types import LimitedDict
 
 # Loads user database. Database is plaintext but stores passwords as a hash salted by config.PASSWORD
@@ -94,7 +99,7 @@ class PermissionList(list):
 
 class User:
 	"""Object for WebUI users"""
-	def __init__(self, row:_PickleTRow={}):
+	def __init__(self, row=None):
 		"""Generate Object for WebUI users
 
 		Args:
@@ -111,7 +116,7 @@ class User:
 		"""
 
 
-		self.db = row
+		self.db = {} if row is None else row
 		self.user_handler = User_handler() # type: User_handler
 
 
@@ -435,7 +440,7 @@ class User:
 
 
 class User_handler:
-	def __init__(self, init_permissions={}):
+	def __init__(self, init_permissions=None):
 		"""
 		init_permissions: `dict` of `UserPermission` to be used as default for new users (member, admin, guest) `{"member": [perms,..], ...}`
 		"""
@@ -446,7 +451,7 @@ class User_handler:
 		self.common_salt = "0123456789"
 
 		self.admins:List[User] = []
-		self.member_permission = init_permissions
+		self.member_permission = {} if init_permissions is None else init_permissions
 
 	def set_common_salt(self, sys_Pass):
 		self.common_salt = hashlib.md5(sys_Pass).hexdigest()
@@ -637,7 +642,7 @@ class User_handler:
 			return user
 		return None
 
-	def authenticate_handler(self, handler:SH, allow_guests: bool = True, guest_user: User = None) -> Tuple[Union[User, None], SimpleCookie]:
+	def authenticate_handler(self, handler: 'SH', allow_guests: bool = True, guest_user: User = None) -> Tuple[Union[User, None], SimpleCookie]:
 		"""
 		Authenticate request handler using cookies.
 		Returns (user, cookie).
