@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from typing import Union
 import json
 import mimetypes
@@ -10,6 +11,97 @@ from queue import Queue
 from typing import Generator, List, Union
 
 from pathlib import Path
+from importlib import import_module
+
+import sys
+import subprocess
+import ctypes
+
+
+def import_loop(
+	packages: list,
+	export: Union[str, list, tuple] = None,
+	action: Callable = None,
+	fallback: Callable = None
+):
+	"""
+	Try importing across a list of package names until one succeeds.
+	- `export`: Attribute name (str) or list/tuple of candidate attribute names to extract from the module.
+	- `action`: Callable (e.g. lambda / function) to perform on the imported module (or on the exported item if export is provided).
+	- `fallback`: Callable to execute if all package candidates fail.
+	"""
+	for package in packages:
+		try:
+			mod = import_module(package)
+			target = mod
+			if export is not None:
+				if isinstance(export, str):
+					target = getattr(mod, export)
+				elif isinstance(export, (list, tuple)):
+					found = False
+					for attr in export:
+						if hasattr(mod, attr):
+							target = getattr(mod, attr)
+							found = True
+							break
+					if not found:
+						raise AttributeError(f"None of {export} found in {package}")
+
+			if callable(action):
+				return action(target)
+			return target
+		except (ImportError, AttributeError):
+			continue
+
+	if callable(fallback):
+		return fallback()
+	return None
+
+
+def get_gpu_names():
+	gpus = set()
+
+	if sys.platform.startswith('win'):
+		from ctypes import wintypes
+
+		class DISPLAY_DEVICEW(ctypes.Structure):
+			_fields_ = [
+				("cb", wintypes.DWORD),
+				("DeviceName", ctypes.c_wchar * 32),
+				("DeviceString", ctypes.c_wchar * 128),
+				("StateFlags", wintypes.DWORD),
+				("DeviceID", ctypes.c_wchar * 128),
+				("DeviceKey", ctypes.c_wchar * 128)
+			]
+
+		user32 = ctypes.windll.user32
+		disp_dev = DISPLAY_DEVICEW()
+		disp_dev.cb = ctypes.sizeof(DISPLAY_DEVICEW)
+		
+		dev_num = 0
+		while user32.EnumDisplayDevicesW(None, dev_num, ctypes.byref(disp_dev), 0):
+			gpu_name = disp_dev.DeviceString
+			if gpu_name:
+				gpus.add(gpu_name.lower())
+			dev_num += 1
+
+	elif sys.platform.startswith('linux'):
+		try:
+			# lspci lists all PCI devices. We filter for VGA (graphics) or 3D controllers.
+			output = subprocess.check_output(['lspci'], text=True)
+			for line in output.splitlines():
+				if 'VGA compatible controller' in line or '3D controller' in line:
+					# Output looks like: "01:00.0 VGA compatible controller: NVIDIA Corporation GA106 [GeForce RTX 3060]"
+					# We split by ':' and take the last part.
+					gpu_name = line.split(':')[-1].strip()
+					gpus.add(gpu_name.lower())
+		except (FileNotFoundError, subprocess.SubprocessError):
+			pass
+
+	elif sys.platform.startswith('darwin'):
+		gpus.add("videotoolbox")
+
+	return list(gpus)
 
 
 def get_codec():
@@ -30,32 +122,18 @@ def get_codec():
 		- On macOS, returns "videotoolbox" directly.
 		- Requires `subprocess` and `sys` modules.
 	"""
-	if sys.platform.startswith('win'):
-		data = subprocess.check_output(
-			"wmic path win32_VideoController get name", shell=True).decode().lower()
-	elif sys.platform.startswith('linux'):
-		try:
-			subprocess.run(["nvidia-smi"], capture_output=True, check=True)
-			data = "nvidia"
-		except (subprocess.CalledProcessError, FileNotFoundError):
-			try:
-				data = subprocess.check_output(
-					"lspci | grep VGA", shell=True).decode().lower()
-			except Exception as e:
-				data = "none"
-	elif sys.platform.startswith('darwin'):
-		return "videotoolbox"
+	def is_in(gpu:str, gpu_list:list):
+		return any(gpu.lower() in keyword.lower() for keyword in gpu_list)
 
-	if "nvidia" in data:
-		# return "libx265"
-		# return "hevc_nvenc"
+	gpus = get_gpu_names()
+	if is_in("nvidia", gpus):
 		return "h264_nvenc"
-	elif "intel" in data:
+	elif is_in("intel", gpus):
 		return "h264_qsv"
-	elif "amd" in data or "radeon" in data:
+	elif is_in("amd", gpus) or is_in("radeon", gpus):
 		return "h264_amf"
-	else:
-		return "libx264"
+	
+	return "libx264"
 
 
 exe_location_cache = {}
@@ -106,7 +184,6 @@ def set_terminal_title(title):
 		Exception: If writing to sys.stdout fails on non-Windows platforms.
 	"""
 	if sys.platform.startswith('win'):
-		import ctypes
 		ctypes.windll.kernel32.SetConsoleTitleW(title)
 	else:
 		sys.stdout.write(f"\x1b]2;{title}\x07")
@@ -442,15 +519,10 @@ def str_comma(x):
 		"1,23" → "1.23"
 		4.56 → "4,56"
 	"""
-	try:
-		try:
-			from pyroDB2 import _PyroTCell
-		except ImportError:
-			from pyroDB import _PickleTCell
-		if isinstance(x, _PyroTCell):
-			x = x.value
-	except ImportError:
-		pass
+	_PyroTCell = import_loop(["pyroDB3", "pyroDB2", "pyroDB"], export="_PyroTCell")
+	if _PyroTCell and isinstance(x, _PyroTCell):
+		x = x.value
+
 	if not isinstance(x, str):
 		x = str(x)
 	return x.replace('.', '\0').replace(',', '.').replace('\0', ',')
@@ -463,15 +535,10 @@ def str_comma_to_float(x):
 		"1,23" → 1.23
 		"1.23" → 1.23 (unchanged)
 	"""
-	try:
-		try:
-			from pyroDB2 import _PyroTCell
-		except ImportError:
-			from pyroDB import _PickleTCell
-		if isinstance(x, _PyroTCell):
-			x = x.value
-	except ImportError:
-		pass
+	_Cell = import_loop(["pyroDB3", "pyroDB2", "pyroDB"], export=["_PyroTCell", "_PickleTCell"])
+	if _Cell and isinstance(x, _Cell):
+		x = x.value
+
 	if isinstance(x, (int, float)):
 		return float(x)
 	return float(str(x).replace('.', '').replace(',', '.'))
@@ -515,30 +582,25 @@ class CaseInsensitiveDict(dict):
 		return default
 
 
-try:
-	from print_text3 import xprint
-except ImportError:
-	try:
-		from print_text4 import xprint
-	except ImportError:
-		def xprint(*args, sep=' ', end='\n', **kwargs):
-			"""
-			Prints text with a specific format.
-			"""
+def _fallback_xprint(*args, sep=' ', end='\n', **kwargs):
+	"""
+	Prints text with a specific format.
+	"""
+	blue_term_text = '\033[94m'
+	reset_term_text = '\033[0m'
 
-			blue_term_text = '\033[94m'
-			reset_term_text = '\033[0m'
+	args = list(args)  # Convert args to a list for modification
+	for i, string in enumerate(args):
+		if isinstance(string, str):
+			# Replace special codes with terminal colors
+			string = string.replace('/b/', blue_term_text)
+			string = string.replace('/=/', reset_term_text)
+			args[i] = string
 
-			args = list(args)  # Convert args to a list for modification
-			for i, string in enumerate(args):
-				if isinstance(string, str):
-					# Replace special codes with terminal colors
-					string = string.replace('/b/', blue_term_text)
-					string = string.replace('/=/', reset_term_text)
+	print(*args, sep=sep, end=end, **kwargs)
 
-					args[i] = string
 
-			print(*args, sep=sep, end=end, **kwargs)
+xprint = import_loop(["print_text3", "print_text4"], export="xprint", fallback=lambda: _fallback_xprint)
 
 
 
@@ -573,114 +635,259 @@ def lprint(*args, **kwargs):
 
 
 if __name__ == '__main__':
-	# Test get_codec()
-	print("\nTesting get_codec():")
-	codec = get_codec()
-	print(f"Detected codec: {codec} (platform: {sys.platform})")
+	import io
+	import time
+	import traceback
+	from functools import wraps
 
-	# Test file operations
-	print("\nTesting file operations:")
-	test_file = "UX_Tools_test_file.txt"
-	test_json = "UX_Tools_test_json.json"
-	test_video = "UX_Tools_test_video.mp4"
-	
-	# Create test files
-	with open(test_file, "w", encoding="utf-8") as f:
-		f.write("Hello\nWorld")
-	
-	test_data = {"key": "value", "num": 123}
-	save_json_file(test_json, test_data)
-	
-	# Test read_str_file
-	print("\nread_str_file():")
-	print(read_str_file(test_file))
-	
-	# Test read_json_file
-	print("\nread_json_file():")
-	print(read_json_file(test_json))
-	
-	# Test get_exe_location
-	print("\nget_exe_location():")
-	print("Python executable:", get_exe_location("python"))
-	print("FFmpeg executable:", get_exe_location("ffmpeg"))
-	
-	# Test set_terminal_title
-	print("\nset_terminal_title() - should change terminal title")
-	set_terminal_title("Utility Functions Test")
-	
-	# Test xpath
-	print("\nxpath():")
-	print("Joined path:", xpath("folder", "subfolder", "file.txt"))
-	print("Posix style:", xpath("folder\\subfolder", "file.txt", posix=True))
-	print("Windows style:", xpath("folder/subfolder", "file.txt", posix=False))
-	
-	# Test EXT
-	print("\nEXT():")
-	print("Extension of file.txt:", EXT("file.txt"))
-	print("Extension of archive.tar.gz:", EXT("archive.tar.gz"))
-	
-	# Test file_exists
-	print("\nfile_exists():")
-	print(f"Does {test_file} exist?", file_exists(".", test_file))
-	print("Does non_existent.txt exist?", file_exists(".", "non_existent.txt"))
-	
-	# Test remove_new_lines
-	print("\nremove_new_lines():")
-	multiline = "Line 1\nLine 2\\nLine 3"
-	print(f"Original: {repr(multiline)}")
-	print(f"Processed: {repr(remove_new_lines(multiline))}")
-	
-	# Test make_dir
-	print("\nmake_dir():")
-	UX_Tools_test_dir = make_dir("UX_Tools_test_dir", "subdir")
-	print(f"Created directory: {UX_Tools_test_dir}")
-	
-	# Test os_scan_walk
-	print("\nos_scan_walk():")
-	print("Files in current directory:")
-	for entry in os_scan_walk("."):
-		print(f"- {entry.name}")
-	
-	# Test is_file and is_filetype
-	print("\nis_file() and is_filetype():")
-	print(f"Is {test_file} a file?", is_file(test_file))
-	print(f"Is {test_file} a text file?", is_filetype(test_file, ext_type="text"))
-	print(f"Is {test_video} a video file?", is_filetype(test_video, ext_type="video"))
+	class SkipTest(Exception):
+		pass
 
-	
-	# Test Text_Box
-	print("\nText_Box():")
-	text_box.print_box("This is a test message", style="star")
-	text_box.print_box("Another message\nwith multiple lines", style="dash")
-	
-	# Test ease_in_out
-	print("\nease_in_out():")
-	duration = 10
-	ease_in = 2
-	ease_out = 3
-	for t in [0, 1, 5, 9, 10, 11]:
-		print(f"t={t}: {ease_in_out(t, duration, ease_in, ease_out):.2f}")
-	
-	# Test str_comma and str_comma_to_float
-	print("\nstr_comma() and str_comma_to_float():")
-	num = 1234.5678
-	print(f"Original: {num}, Formatted: {str_comma(num)}")
-	comma_num = "1.234,56"
-	print(f"Original: {comma_num}, Converted: {str_comma_to_float(comma_num)}")
-	
-	# Test CaseInsensitiveDict
-	print("\nCaseInsensitiveDict():")
-	cid = CaseInsensitiveDict({"Name": "John", "Age": 30})
-	print("Access with different cases:", cid["NAME"], cid["name"])
-	print("Contains check:", "AGE" in cid, "gender" in cid)
-	
-	# Test lprint
-	print("\nlprint():")
-	lprint("This should show the line number where it's called")
-	
-	# Clean up test files
-	os.remove(test_file)
-	os.remove(test_json)
-	shutil.rmtree("UX_Tools_test_dir")
-	
-	print("\nAll tests completed!")
+	def timed_test(test_func):
+		@wraps(test_func)
+		def wrapper(*args, **kwargs):
+			start_time = time.perf_counter()
+			print(f"\n⏱️  Starting {test_func.__name__}...")
+			try:
+				result = test_func(*args, **kwargs)
+				elapsed = time.perf_counter() - start_time
+				print(f"✅ {test_func.__name__} completed in {elapsed:.4f}s")
+				return result
+			except SkipTest as e:
+				elapsed = time.perf_counter() - start_time
+				print(f"⚠️  {test_func.__name__} skipped ({e}) after {elapsed:.4f}s")
+				wrapper._is_skipped = True
+				return None
+			except Exception as e:
+				elapsed = time.perf_counter() - start_time
+				print(f"❌ {test_func.__name__} failed after {elapsed:.4f}s")
+				raise
+		wrapper._is_skipped = False
+		return wrapper
+
+	def assert_with_message(condition, message, *extra, message_on_fail=None, message_on_success=None, time_start=None):
+		"""Helper for better assertion messages"""
+		if time_start is not None:
+			time_end = time.perf_counter()
+			message = f"{message} (Time taken: {time_end - time_start:.4f}s)"
+
+		if message_on_fail is None or message_on_fail is True:
+			message_on_fail = message
+		elif message_on_fail is False:
+			message_on_fail = ""
+		else:
+			message_on_fail = f"{message_on_fail} ({message})"
+
+		if message_on_success is None or message_on_success is True:
+			message_on_success = message
+		elif message_on_success is False:
+			message_on_success = ""
+		else:
+			message_on_success = f"{message_on_success} ({message})"
+
+		if not condition:
+			if extra:
+				if len(extra) == 1:
+					message_on_fail = f"{message_on_fail} ({extra[0]})"
+				elif len(extra) == 2:
+					message_on_fail = f"{message_on_fail}\n(\n\tExpected: \n{extra[0]}\n\tGot: \n{extra[1]}\n)"
+			if message_on_fail:
+				raise AssertionError(f"❌ {message_on_fail}")
+			else:
+				raise AssertionError()
+
+		if message_on_success:
+			print(f"  ✓ {message_on_success}")
+
+	def _safe_remove(path):
+		if os.path.exists(path):
+			if os.path.isdir(path):
+				shutil.rmtree(path, ignore_errors=True)
+			else:
+				try:
+					os.remove(path)
+				except OSError:
+					pass
+
+	@timed_test
+	def test_import_loop():
+		# 1. Direct module import
+		m = import_loop(['json', 'non_existent_module_xyz'])
+		assert_with_message(m is json, "Direct module import (json)")
+
+		# 2. Export attribute from module
+		dumps_fn = import_loop(['non_existent_module_xyz', 'json'], export='dumps')
+		assert_with_message(callable(dumps_fn), "Export attribute (dumps) from module")
+		assert_with_message(dumps_fn({'a': 1}) == '{"a": 1}', "Exported dumps function execution")
+
+		# 3. Export candidate list of attributes
+		loads_fn = import_loop(['json'], export=['non_existent_func', 'loads'])
+		assert_with_message(callable(loads_fn), "Export candidates list attribute resolution")
+		assert_with_message(loads_fn('{"a": 1}') == {'a': 1}, "Exported loads function execution")
+
+		# 4. Action lambda on module
+		v = import_loop(['sys'], action=lambda mod: mod.version_info[0])
+		assert_with_message(v >= 3, "Action callable applied on imported module", ">=3", v)
+
+		# 5. Export + Action combination
+		res = import_loop(['json'], export='loads', action=lambda fn: fn('{"num": 100}'))
+		assert_with_message(res == {'num': 100}, "Action callable applied on exported attribute", {'num': 100}, res)
+
+		# 6. Fallback when all fail
+		fb_res = import_loop(['non_existent_1', 'non_existent_2'], fallback=lambda: "FALLBACK_VALUE")
+		assert_with_message(fb_res == "FALLBACK_VALUE", "Fallback triggered when all imports fail")
+
+	@timed_test
+	def test_gpu_and_codec():
+		gpus = get_gpu_names()
+		assert_with_message(isinstance(gpus, list), "get_gpu_names returns list", list, type(gpus))
+		codec = get_codec()
+		assert_with_message(isinstance(codec, str) and len(codec) > 0, "get_codec returns non-empty string", codec)
+
+	@timed_test
+	def test_file_operations():
+		test_file = "__ux_test_file.txt"
+		test_json = "__ux_test_json.json"
+		test_dir = "__ux_test_dir"
+
+		try:
+			# Text write & read
+			with open(test_file, "w", encoding="utf-8") as f:
+				f.write("Line1\nLine2")
+			content = read_str_file(test_file)
+			assert_with_message(content == "Line1\nLine2", "read_str_file matches content", "Line1\nLine2", content)
+
+			# JSON write & read
+			payload = {"name": "test", "items": [1, 2, 3], "flag": True}
+			save_json_file(test_json, payload)
+			loaded_json = read_json_file(test_json)
+			assert_with_message(loaded_json == payload, "save_json_file / read_json_file roundtrip", payload, loaded_json)
+
+			# File existence & type
+			assert_with_message(file_exists(".", test_file), "file_exists for created file")
+			assert_with_message(not file_exists(".", "__non_existent_file_xyz.tmp"), "file_exists for non-existent file")
+			assert_with_message(is_file(test_file), "is_file returns True for file")
+			assert_with_message(is_filetype(test_file, ext_type="text"), "is_filetype detects text file")
+
+			# make_dir & scan
+			created_dir = make_dir(test_dir, "sub")
+			assert_with_message(os.path.isdir(created_dir), "make_dir creates nested directories")
+
+			scanned_dirs = [entry.name for entry in os_scan_walk(test_dir, allow_dir=True)]
+			assert_with_message("sub" in scanned_dirs, "os_scan_walk (allow_dir=True) finds created directory")
+
+		finally:
+			_safe_remove(test_file)
+			_safe_remove(test_json)
+			_safe_remove(test_dir)
+
+	@timed_test
+	def test_path_and_string_utils():
+		# xpath
+		p_posix = xpath("folder", "subfolder", "file.txt", posix=True)
+		assert_with_message(p_posix == "folder/subfolder/file.txt", "xpath posix style", "folder/subfolder/file.txt", p_posix)
+
+		# EXT
+		ext_single = EXT("archive.zip")
+		assert_with_message(ext_single == "zip", "EXT single extension", "zip", ext_single)
+		ext_multi = EXT("archive.tar.gz")
+		assert_with_message(ext_multi == "gz", "EXT extension", "gz", ext_multi)
+
+		# remove_new_lines
+		cleaned = remove_new_lines("Line 1\nLine 2\\nLine 3")
+		assert_with_message(cleaned == "Line 1Line 2\\nLine 3", "remove_new_lines strips actual newlines while preserving literal \\n", "Line 1Line 2\\nLine 3", cleaned)
+
+	@timed_test
+	def test_number_formatting():
+		# str_comma
+		assert_with_message(str_comma("1.23") == "1,23", "str_comma converts dot to comma", "1,23", str_comma("1.23"))
+		assert_with_message(str_comma("1,23") == "1.23", "str_comma converts comma to dot", "1.23", str_comma("1,23"))
+		assert_with_message(str_comma(4.56) == "4,56", "str_comma formats float", "4,56", str_comma(4.56))
+
+		# str_comma_to_float
+		assert_with_message(str_comma_to_float("1,23") == 1.23, "str_comma_to_float converts comma string to float", 1.23, str_comma_to_float("1,23"))
+		assert_with_message(str_comma_to_float("1.234,56") == 1234.56, "str_comma_to_float handles thousands dot", 1234.56, str_comma_to_float("1.234,56"))
+		assert_with_message(str_comma_to_float(42.5) == 42.5, "str_comma_to_float preserves existing float", 42.5, str_comma_to_float(42.5))
+
+		# ease_in_out
+		assert_with_message(ease_in_out(0, 10, 2, 3) == 0.0, "ease_in_out at start is 0.0")
+		assert_with_message(ease_in_out(10, 10, 2, 3) == 1.0, "ease_in_out at end is 1.0")
+
+	@timed_test
+	def test_case_insensitive_dict():
+		cid = CaseInsensitiveDict({"Name": "Alice", "AGE": 25})
+		assert_with_message(cid["name"] == "Alice", "CaseInsensitiveDict get lowercase", "Alice", cid["name"])
+		assert_with_message(cid["NAME"] == "Alice", "CaseInsensitiveDict get uppercase", "Alice", cid["NAME"])
+		assert_with_message(cid["age"] == 25, "CaseInsensitiveDict get mixed case", 25, cid["age"])
+		assert_with_message("name" in cid, "CaseInsensitiveDict membership check")
+		assert_with_message("AGE" in cid, "CaseInsensitiveDict uppercase membership check")
+		assert_with_message("missing" not in cid, "CaseInsensitiveDict non-existent key check")
+
+		cid["CITY"] = "Wonderland"
+		assert_with_message(cid["city"] == "Wonderland", "CaseInsensitiveDict set item case insensitive")
+
+		val = cid.pop("City")
+		assert_with_message(val == "Wonderland" and "city" not in cid, "CaseInsensitiveDict pop case insensitive")
+
+	@timed_test
+	def test_printing_and_box():
+		# Capture output of xprint & Text_Box
+		old_stdout = sys.stdout
+		sys.stdout = io.StringIO()
+		try:
+			xprint("Testing /b/blue text/=/")
+			text_box.print_box("Box Message", style="star")
+			lprint("Line print message")
+			out = sys.stdout.getvalue()
+		finally:
+			sys.stdout = old_stdout
+
+		assert_with_message("blue text" in out, "xprint formats correctly")
+		assert_with_message("Box Message" in out, "text_box prints content")
+		assert_with_message("line " in out, "lprint outputs line marker")
+
+	def run_all_tests():
+		"""Run all test cases with timing and proper cleanup, mirroring pyroDB3 test runner"""
+		tests = [
+			test_import_loop,
+			test_gpu_and_codec,
+			test_file_operations,
+			test_path_and_string_utils,
+			test_number_formatting,
+			test_case_insensitive_dict,
+			test_printing_and_box,
+		]
+
+		start_time = time.perf_counter()
+		failures = 0
+		skipped = 0
+
+		print(f"{'='*60}")
+		print(f"🚀 Running UX_Tools Test Suite ({len(tests)} test suites)")
+		print(f"{'='*60}")
+
+		for test in tests:
+			try:
+				result = test()
+				if result is None and getattr(test, '_is_skipped', False):
+					skipped += 1
+			except AssertionError as e:
+				failures += 1
+				print(f"❌ {test.__name__} failed: {str(e)}")
+				print('+'*50 + f"\n{traceback.format_exc()}\n" + '-'*50)
+			except Exception as e:
+				failures += 1
+				print(f"❌ {test.__name__} failed (UNHANDLED): {str(e)}")
+				print('+'*50 + f"\n{traceback.format_exc()}\n" + '-'*50)
+
+		total_time = time.perf_counter() - start_time
+		print(f"\n{'='*60}")
+		skip_str = f", {skipped} skipped" if skipped else ""
+		print(f"⏱️  Test Summary: {len(tests)} test suites, {failures} failures{skip_str}")
+		print(f"⏱️  Total execution time: {total_time:.4f} seconds")
+		print(f"{'='*60}")
+
+		if failures > 0:
+			raise SystemExit(1)
+
+	run_all_tests()
