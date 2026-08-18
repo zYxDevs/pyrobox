@@ -886,6 +886,11 @@ class FileManager {
 		
 		const { folderFragment, fileFragment } = this.createFileFragments();
 		
+		if (typeof theme_controller !== 'undefined' && theme_controller.fa_ok) {
+			theme_controller.del_fa_alt(folderFragment);
+			theme_controller.del_fa_alt(fileFragment);
+		}
+
 		fragment.appendChild(folderFragment);
 		fragment.appendChild(fileFragment);
 		
@@ -937,7 +942,7 @@ class FileManager {
 		} else if (text_extensions.includes(file_ext)) {
 			// Text files - open in editor
 			link.href = go_link("edit", r_);
-			itemTypeInfo = { icon: '📝', class: 'file code', type: 'file' };
+			itemTypeInfo = { icon: '📝', faClass: 'fa-solid fa-file-code', class: 'file code', type: 'file' };
 		} else {
 			// Other files - normal download link
 			link.href = r_;
@@ -946,7 +951,7 @@ class FileManager {
 		link.title = name;
 		link.className = `all_link disable_selection ${itemTypeInfo.class}`;
 		
-		link.appendChild(this.createIconElement(itemTypeInfo.icon));
+		link.appendChild(this.createIconElement(itemTypeInfo.icon, itemTypeInfo.faClass));
 		link.appendChild(this.createNameElement(name, s_li[i]));
 		
 		link.oncontextmenu = (ev) => {
@@ -957,32 +962,38 @@ class FileManager {
 		
 		item.appendChild(link);
 		item.appendChild(createElement("hr"));
+
+		if (typeof theme_controller !== 'undefined' && theme_controller.fa_ok) {
+			theme_controller.del_fa_alt(item);
+		}
 		
 		return item;
 	}
 
-	createIconElement(icon) {
+	createIconElement(icon, faClass) {
 		const element = createElement("span");
-		element.className = "link_icon";
-		element.innerHTML = icon.toHtmlEntities ? icon.toHtmlEntities() : icon;
+		element.className = "link_icon" + (faClass ? ` fa ${faClass}` : "");
+		element.innerText = icon;
 		return element;
 	}
 
 	createNameElement(name, size) {
-		const element = createElement("span");
-		element.className = "link_name";
-		element.innerText = " " + name;
+		const container = createElement("div");
+		container.className = "link_text_container";
+		
+		const nameElement = createElement("span");
+		nameElement.className = "link_name";
+		nameElement.innerText = name;
+		container.appendChild(nameElement);
 		
 		if (size) {
-			element.appendChild(createElement("br"));
-			
 			const sizeElement = createElement("span");
 			sizeElement.className = "link_size";
 			sizeElement.innerText = size;
-			element.appendChild(sizeElement);
+			container.appendChild(sizeElement);
 		}
 		
-		return element;
+		return container;
 	}
 
 	clear_file_list() {
@@ -1067,6 +1078,14 @@ class FM_Page extends Page {
 
 		// Reset original order for the new folder
 		fm.orig_order = null;
+
+		// Await FontAwesome ready before first render so icons are swapped in-memory without flash
+		if (typeof theme_controller !== 'undefined' && theme_controller.fa_ready_promise && !theme_controller.fa_ok) {
+			await Promise.race([
+				theme_controller.fa_ready_promise,
+				new Promise(r => setTimeout(r, 400))
+			]);
+		}
 
 		let sort_type = pref_store.get("sort_type");
 		let sort_order = pref_store.get("sort_order");

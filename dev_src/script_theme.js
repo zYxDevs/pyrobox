@@ -5,6 +5,9 @@ class Theme_Controller {
 	// TRON and modern theme controller
 	constructor() {
 		this.fa_ok = false;
+		this.fa_ready_promise = new Promise((resolve) => {
+			this._resolve_fa = resolve;
+		});
 		this.current_theme = "dark-cyan";
 		this.init_theme();
 	}
@@ -135,17 +138,20 @@ class Theme_Controller {
 		link.type = "text/css";
 		link.media = "print";  // Load in print mode first to avoid blocking render
 	
-		const cache_buster = Math.random();  // Force new font fetch (fixes Tofu issue)
-		link.href = "https://fabkp.pages.dev/css/all.css" + "?no_cache=" + cache_buster;
+		link.href = "https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.3.1/css/all.min.css";
 	
 		link.onload = function () {
-
 			// Wait for all fonts, including WOFF, to be fully loaded
 			document.fonts.ready.then(() => {
 				that.fa_ok = true;  // Only set when confirmed fully loaded
 				that.del_fa_alt();  // Swap placeholders
 				link.media = "all";  // Apply styles properly
+				if (that._resolve_fa) that._resolve_fa(true);
 			});
+		};
+
+		link.onerror = function () {
+			if (that._resolve_fa) that._resolve_fa(false);
 		};
 	
 		document.head.appendChild(link);
