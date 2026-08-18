@@ -4333,6 +4333,10 @@ if __name__ == "__main__":
 
 	import multiprocessing
 
+	# Custom Skip Exception
+	class SkipTest(Exception):
+		pass
+
 	# Timing Decorator
 	def timed_test(test_func):
 		@wraps(test_func)
@@ -4344,10 +4348,25 @@ if __name__ == "__main__":
 				elapsed = time.perf_counter() - start_time
 				print(f"✅ {test_func.__name__} completed in {elapsed:.4f}s")
 				return result
+			except SkipTest as e:
+				elapsed = time.perf_counter() - start_time
+				print(f"⚠️  {test_func.__name__} skipped ({e}) after {elapsed:.4f}s")
+				wrapper._is_skipped = True
+				return None
 			except Exception as e:
 				elapsed = time.perf_counter() - start_time
 				print(f"❌ {test_func.__name__} failed after {elapsed:.4f}s")
 				raise
+		wrapper._is_skipped = False
+		return wrapper
+
+	def requires_save_load(test_func):
+		"""Decorator to skip tests that require msgpack (file save/load)."""
+		@wraps(test_func)
+		def wrapper(*args, **kwargs):
+			if not SAVE_LOAD:
+				raise SkipTest("msgpack not installed (SAVE_LOAD is False)")
+			return test_func(*args, **kwargs)
 		return wrapper
 
 	# Helper Functions (same as before)
@@ -4483,6 +4502,7 @@ if __name__ == "__main__":
 		__key_error(tb.column_obj)
 
 	@timed_test
+	@requires_save_load
 	def test_persistence():
 		"""Test saving and loading table with comprehensive checks"""
 		print("\n=== Testing Persistence ===")
@@ -4907,6 +4927,7 @@ if __name__ == "__main__":
 			os.remove(test_file)
 
 	@timed_test
+	@requires_save_load
 	def test_extreme_concurrency():
 		"""Brutal concurrency stress test with mixed operations"""
 		print("\n=== Testing Extreme Concurrency ===")
@@ -5533,10 +5554,13 @@ if __name__ == "__main__":
 
 		start_time = time.perf_counter()
 		failures = 0
+		skipped = 0
 
 		for test in tests:
 			try:
-				test()
+				result = test()
+				if result is None and getattr(test, '_is_skipped', False):
+					skipped += 1
 			except AssertionError as e:
 				failures += 1
 				print(f"❌ {test.__name__} failed: {str(e)}")
@@ -5548,7 +5572,8 @@ if __name__ == "__main__":
 
 		total_time = time.perf_counter() - start_time
 		print(f"\n{'='*50}")
-		print(f"⏱️  Test Summary: {len(tests)} tests, {failures} failures")
+		skip_str = f", {skipped} skipped" if skipped else ""
+		print(f"⏱️  Test Summary: {len(tests)} tests, {failures} failures{skip_str}")
 		print(f"⏱️  Total execution time: {total_time:.4f} seconds")
 		print("="*50)
 

@@ -1,0 +1,6 @@
+natsort
+tabulate2
+msgpack
+send2trash
+pyqrcode
+requests
