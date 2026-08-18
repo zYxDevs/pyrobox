@@ -112,6 +112,7 @@ class Config:
 
 		# COMMANDLINE ARGUMENTS PARSER
 		self.parser = argparse.ArgumentParser(add_help=False)
+		self._custom_cli_args_added = False
 
 		# Default error message template
 		self.DEFAULT_ERROR_MESSAGE = Template("""

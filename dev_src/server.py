@@ -23,7 +23,7 @@ from http import HTTPStatus
 from http.cookies import SimpleCookie
 
 import _page_templates as pt
-from _arg_parser import main as arg_parser
+from _arg_parser import add_args
 from _exceptions import LimitExceed
 from _fs_utils import (UploadHandler, dir_navigator, fmbytes, get_dir_size,
 					   get_stat, get_titles, get_tree_count_n_size, humanbytes)
@@ -50,7 +50,7 @@ enc = "utf-8"
 # ADD COMMAND LINE ARGUMENTS
 ###########################################
 
-arg_parser(CoreConfig)
+add_args(CoreConfig)
 cli_args = CoreConfig.parser.parse_known_args()[0]
 CoreConfig.PASSWORD = cli_args.password
 

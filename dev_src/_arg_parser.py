@@ -1,11 +1,15 @@
 # add additional arguments to the parser
 config = None
 # the config must be imported from pyroboxCore
-if __name__ == "__main__":
-	from pyroboxCore import config
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+	from pyroboxCore import Config
 
 
-def main(config=config):
+def add_args(config:Config):
+	if config._custom_cli_args_added:
+		return
 	config.parser.add_argument('--password', '-k',
 							default=config.PASSWORD,
 							type=str,
@@ -98,3 +102,5 @@ def main(config=config):
 							default="6GB",
 							type=str,
 							help='[Value] Max size of zip file allowed to download (default: %(default)s) [can be bytes without suffix or suffixes like 1KB, 1MB, 1GB, 1TB]')
+
+	config._custom_cli_args_added = True
