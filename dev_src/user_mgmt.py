@@ -152,6 +152,74 @@ class User:
 	def permission(self) -> PermissionList:
 		return self.unpack_permission(self.permission_pack)
 
+	@property
+	def allowed_paths(self) -> list:
+		paths = self.db.get("allowed_paths", [])
+		if isinstance(paths, str):
+			try:
+				paths = json.loads(paths)
+			except Exception:
+				paths = []
+		return paths
+
+	def set_allowed_paths(self, paths: list):
+		self.update("allowed_paths", paths)
+
+	def is_path_allowed(self, path: str) -> bool:
+		allowed = self.allowed_paths
+		if not allowed:                      # empty = unrestricted
+			return True
+
+		path = normalize(path)
+
+		longest_match_len = -1
+		longest_match_type = None
+		has_allow_child = False
+
+		for entry in allowed:
+			if not isinstance(entry, dict):
+				continue
+				
+			r_path = normalize(entry.get("path", ""))
+			r_subdirs = entry.get("subdirs", True)
+			r_type = entry.get("type", "allow").lower()
+			
+			r_len = len(r_path)
+
+			# 1. Exact match
+			if path == r_path:
+				if r_len > longest_match_len:
+					longest_match_len = r_len
+					longest_match_type = r_type
+					
+			# 2. Path is inside the rule path (rule path is a parent)
+			elif path.startswith(r_path + "/"):
+				if r_subdirs:
+					if r_len > longest_match_len:
+						longest_match_len = r_len
+						longest_match_type = r_type
+				else:
+					# If subdirs is False, allow files directly inside, but no deeper directories
+					if path[len(r_path)+1:].find("/") == -1: 
+						if r_len > longest_match_len:
+							longest_match_len = r_len
+							longest_match_type = r_type
+							
+			# 3. Path is an ancestor of the rule path (we are walking down the tree)
+			elif r_path.startswith(path + "/") or path == "/":
+				if r_type == "allow":
+					has_allow_child = True
+
+		# Follow the most specific rule if there is one
+		if longest_match_type is not None:
+			return longest_match_type == "allow"
+			
+		# If no direct match, but it's an ancestor of an allowed path, allow it so the user can navigate down
+		if has_allow_child:
+			return True
+
+		return False
+
 
 	def is_admin(self) -> bool:
 		return self.ADMIN
@@ -311,7 +379,8 @@ class User:
 		new_permission = self.permission
 
 		for each in permission:
-			if not hasattr(each, 'value') and not each: continue # default permission may have none or empty at Initialization
+			if not hasattr(each, 'value') and not each: 
+				continue # default permission may have none or empty at Initialization
 			new_permission[each.value] = 1
 			# -1 because 0 is no permission
 		self._save_permission(new_permission)
@@ -391,6 +460,7 @@ class User_handler:
 			"id",
 			"token",
 			"permission",
+			"allowed_paths",
 
 			exist_ok=True)
 
@@ -409,6 +479,7 @@ class User_handler:
 			"token": token,
 
 			"permission": 0,
+			"allowed_paths": [],
 		}
 
 		row = self.user_db.add_row(u_data)

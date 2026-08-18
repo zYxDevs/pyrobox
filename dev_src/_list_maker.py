@@ -116,7 +116,7 @@ def listsort(li):
 
 
 
-def list_directory_json(self:SH, path=None):
+def list_directory_json(self:SH, path=None, user:User=None):
 	"""
 	Helper to produce a directory listing (JSON).
 	Return json file of available files and folders
@@ -131,6 +131,10 @@ def list_directory_json(self:SH, path=None):
 			HTTPStatus.NOT_FOUND,
 			"No permission to list directory")
 		return None
+		
+	if user:
+		dir_list = [file for file in dir_list if user.is_path_allowed(posixpath.join(self.url_path, file.name))]
+
 	dir_dict = []
 
 
@@ -172,6 +176,8 @@ def list_directory_html(self:SH, path, user:User, cookie:Union[SimpleCookie, str
 			"No permission to list directory")
 		return None
 
+	if user:
+		dir_list = [file for file in dir_list if user.is_path_allowed(posixpath.join(self.url_path, file.name))]
 
 	r_folders = [] # no js
 	r_files = [] # no js
@@ -257,6 +263,9 @@ def list_directory(self:SH, path, user:User, cookie:Union[SimpleCookie, str]=Non
 			HTTPStatus.NOT_FOUND,
 			"No permission to list directory")
 		return None
+
+	if user:
+		dir_list = [file for file in dir_list if user.is_path_allowed(posixpath.join(self.url_path, file.name))]
 
 	displaypath = self.get_displaypath(
 		url_path=self.url_path,

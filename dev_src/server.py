@@ -332,6 +332,15 @@ def update_user_perm(self: SH, *args, **kwargs):
 	query = self.query
 	username = query.get("username", [None])[0]
 	permission = query.get("perms", [None])[0]
+	
+	allowed_paths_raw = query.get("allowed_paths", [None])[0]
+	if allowed_paths_raw is not None:
+		try:
+			allowed_paths = json.loads(urllib.parse.unquote(allowed_paths_raw))
+		except Exception:
+			allowed_paths = None
+	else:
+		allowed_paths = None
 
 	try:
 		permission = int(permission)
@@ -346,11 +355,15 @@ def update_user_perm(self: SH, *args, **kwargs):
 		return self.send_json({"status": "Failed", "message": "User not found"}, cookie=cookie)
 
 	USER.set_permission_pack(permission)
-
-	self.log_warning(
-		f'Updating permission of "{username}" to "{permission}" by {[USER.uid]}')
-
-	return self.send_json({"status": "Success", "message": "Permission updated"}, cookie=cookie)
+	if allowed_paths is not None:
+		USER.set_allowed_paths(allowed_paths)
+		
+	self_kick = False
+	if user.uid == USER.uid and not USER.is_admin():
+		self_kick = True
+	
+	if permission == USER.permission_pack:
+		return self.send_json({"status": "Success", "message": "Permissions updated", "self_kick": self_kick}, cookie=cookie)
 
 
 @SH.on_req('HEAD', hasQ="get_user_perm")
@@ -373,7 +386,11 @@ def get_user_perm(self: SH, *args, **kwargs):
 	if not USER:
 		return self.send_json({"status": False, "message": "User not found"}, cookie=cookie)
 
-	return self.send_json({"status": True, "permissions_code": USER.permission_pack}, cookie=cookie)
+	return self.send_json({
+		"status": True, 
+		"permissions_code": USER.permission_pack,
+		"allowed_paths": json.dumps(USER.allowed_paths) if USER.allowed_paths else "[]"
+	}, cookie=cookie)
 
 
 @SH.on_req('HEAD', hasQ="add_user")  # added by Admin
@@ -389,6 +406,16 @@ def add_user(self: SH, *args, **kwargs):
 
 	username = self.query.get("username", [None])[0]
 	password = self.query.get("password", [None])[0]
+	permission = self.query.get("perms", [None])[0]
+	
+	allowed_paths_raw = self.query.get("allowed_paths", [None])[0]
+	if allowed_paths_raw is not None:
+		try:
+			allowed_paths = json.loads(urllib.parse.unquote(allowed_paths_raw))
+		except Exception:
+			allowed_paths = None
+	else:
+		allowed_paths = None
 
 	if not (username and password):
 		return self.send_json({"status": False, "message": "Username or password not provided"}, cookie=cookie)
@@ -399,6 +426,15 @@ def add_user(self: SH, *args, **kwargs):
 	new_user = Sconfig.user_handler.create_user(username, password)
 	if not new_user:
 		return self.send_json({"status": False, "message": "Failed to create user"}, cookie=cookie)
+
+	if permission is not None:
+		try:
+			new_user.set_permission_pack(int(permission))
+		except:
+			pass
+			
+	if allowed_paths is not None:
+		new_user.set_allowed_paths(allowed_paths)
 
 	return self.send_json({"status": True, "message": f"<h2>User created.</h2> UID: {new_user.uid}"}, cookie=cookie)
 

@@ -161,6 +161,11 @@ class Admin_tools {
 			<td><input type="checkbox" name="MEMBER" value="7" id="member" disabled></td>
 		</tr>
 	</table>
+	
+	<br>
+	<h3 style="margin-bottom: 5px;">Path Restrictions (empty = all)</h3>
+	<div id="path_list" style="margin-bottom: 10px;"></div>
+	<button type="button" id="add_path_btn" style="padding: 5px; background: #444; color: white; border: 1px solid #555; cursor: pointer;">+ Add Path</button>
 
 	<div class="submit_parent">
 		<input type="submit" name="submit" value="Submit" id="submit">
@@ -258,6 +263,32 @@ keep the submit button in center, modernize the button UI-->
 		justify-content: center;
 	}
 
+
+	.path_row {
+		display: flex;
+		gap: 5px;
+		margin-bottom: 5px;
+	}
+	.path_row input[type=text] {
+		flex: 1;
+		background: #333;
+		color: white;
+		border: 1px solid #555;
+		padding: 5px;
+	}
+	.path_row select {
+		background: #333;
+		color: white;
+		border: 1px solid #555;
+		padding: 5px;
+	}
+	.path_row button {
+		background: #cc0000;
+		color: white;
+		border: none;
+		cursor: pointer;
+		padding: 5px 10px;
+	}
 </style>
 
 		`
@@ -272,6 +303,40 @@ keep the submit button in center, modernize the button UI-->
 	var zip = document.getElementById("zip");
 	var admin = document.getElementById("admin");
 	var member = document.getElementById("member");
+	var path_list = document.getElementById("path_list");
+	var add_path_btn = document.getElementById("add_path_btn");
+
+	function create_path_row(path = "", subdirs = true, type = "allow") {
+		var row = document.createElement("div");
+		row.className = "path_row";
+		
+		var path_input = document.createElement("input");
+		path_input.type = "text";
+		path_input.placeholder = "/Folder";
+		path_input.value = path;
+		
+		var subdirs_select = document.createElement("select");
+		subdirs_select.innerHTML = '<option value="true">Recursive</option><option value="false">Exact</option>';
+		subdirs_select.value = subdirs ? "true" : "false";
+		
+		var type_select = document.createElement("select");
+		type_select.innerHTML = '<option value="allow">Allow</option><option value="deny">Deny</option>';
+		type_select.value = type;
+		
+		var del_btn = document.createElement("button");
+		del_btn.type = "button";
+		del_btn.innerText = "X";
+		del_btn.onclick = () => row.remove();
+		
+		row.appendChild(path_input);
+		row.appendChild(subdirs_select);
+		row.appendChild(type_select);
+		row.appendChild(del_btn);
+		
+		path_list.appendChild(row);
+	}
+	
+	add_path_btn.onclick = () => create_path_row();
 
 	var submit = document.getElementById("submit");
 
@@ -292,6 +357,19 @@ keep the submit button in center, modernize the button UI-->
 			zip.checked = perms["ZIP"];
 			admin.checked = perms["ADMIN"];
 			member.checked = perms["MEMBER"];
+			
+			if (data.allowed_paths !== undefined) {
+				try {
+					var paths = JSON.parse(data.allowed_paths);
+					paths.forEach(p => {
+						if (typeof p === "string") {
+							create_path_row(p, true, "allow");
+						} else {
+							create_path_row(p.path || "", p.subdirs !== false, p.type || "allow");
+						}
+					});
+				} catch(e) {}
+			}
 		} else {
 			popup_msg.createPopup(data["message"]);
 			popup_msg.open_popup();
@@ -314,10 +392,27 @@ keep the submit button in center, modernize the button UI-->
 
 		_user.permissions = dict;
 		var perms = _user.pack_permissions();
+		
+		var paths_data = [];
+		Array.from(path_list.children).forEach(row => {
+			var path_val = row.children[0].value.trim();
+			if (path_val) {
+				paths_data.push({
+					path: path_val,
+					subdirs: row.children[1].value === "true",
+					type: row.children[2].value
+				});
+			}
+		});
+		var paths = encodeURIComponent(JSON.stringify(paths_data));
 
-		fetch('/?update_user_perm&username=' + username + "&perms=" + perms)
+		fetch('/?update_user_perm&username=' + username + "&perms=" + perms + "&allowed_paths=" + paths)
 		.then(response => response.json())
 		.then(data => {
+			if (data.self_kick) {
+				window.location.reload();
+				return;
+			}
 			popup_msg.createPopup(data["status"], data["message"]);
 			popup_msg.open_popup();
 		})
@@ -417,6 +512,45 @@ keep the submit button in center, modernize the button UI-->
 		</tr>
 	</table>
 
+	<br>
+	<h2>Permissions</h2>
+	<table>
+		<tr>
+			<td>View</td>
+			<td><input type="checkbox" name="VIEW" value="0" id="add_view"></td>
+		</tr>
+		<tr>
+			<td>Download</td>
+			<td><input type="checkbox" name="DOWNLOAD" value="1" id="add_download"></td>
+		</tr>
+		<tr>
+			<td>Modify</td>
+			<td><input type="checkbox" name="MODIFY" value="2" id="add_modify"></td>
+		</tr>
+		<tr>
+			<td>Delete</td>
+			<td><input type="checkbox" name="DELETE" value="3" id="add_delete"></td>
+		</tr>
+		<tr>
+			<td>Upload</td>
+			<td><input type="checkbox" name="UPLOAD" value="4" id="add_upload"></td>
+		</tr>
+		<tr>
+			<td>Zip</td>
+			<td><input type="checkbox" name="ZIP" value="5" id="add_zip"></td>
+		</tr>
+		<tr>
+			<td>Admin</td>
+			<td><input type="checkbox" name="ADMIN" value="6" id="add_admin"></td>
+		</tr>
+	</table>
+	
+	<br>
+	<h3 style="margin-bottom: 5px;">Path Restrictions (empty = all)</h3>
+	<div id="add_path_list" style="margin-bottom: 10px;"></div>
+	<button type="button" id="add_add_path_btn" style="padding: 5px; background: #444; color: white; border: 1px solid #555; cursor: pointer;">+ Add Path</button>
+	<br><br>
+
 	<div class="submit_parent">
 		<input type="submit" name="submit" value="Submit" id="add_user_submit">
 	</div>
@@ -486,6 +620,72 @@ keep the submit button in center, modernize the button UI-->
 		background-color: #333;
 		box-shadow: 3px 3px 0 0 #1abeff;
 	}
+	
+	.add_user_form tr:nth-child(even) {background-color: #4d4d4d}
+
+	.add_user_form td:nth-child(1){
+		text-align: left;
+		width: calc(100% - 50px);
+	}
+
+	.add_user_form td:nth-child(2){
+		text-align: center;
+		width: 50px;
+	}
+
+	.add_user_form input[type=checkbox] {
+		-moz-appearance:none;
+		-webkit-appearance:none;
+		-o-appearance:none;
+		outline: none;
+		content: none;
+	}
+
+	.add_user_form input[type=checkbox]:before {
+		content: "✅";
+		font-size: 17px;
+		color: transparent !important;
+		background: #636363;
+		display: block;
+		width: 17px;
+		height: 17px;
+		border: 1px solid black;
+	}
+
+	.add_user_form input[type=checkbox][disabled]:before {
+		filter: grayscale(1);
+	}
+
+	.add_user_form input[type=checkbox]:checked:before {
+		color: black !important;
+	}
+	
+	.path_row {
+		display: flex;
+		gap: 5px;
+		margin-bottom: 5px;
+	}
+	.path_row input[type=text] {
+		flex: 1;
+		background: #333;
+		color: white;
+		border: 1px solid #555;
+		padding: 5px;
+		width: auto;
+	}
+	.path_row select {
+		background: #333;
+		color: white;
+		border: 1px solid #555;
+		padding: 5px;
+	}
+	.path_row button {
+		background: #cc0000;
+		color: white;
+		border: none;
+		cursor: pointer;
+		padding: 5px 10px;
+	}
 
 </style>
 		`
@@ -496,6 +696,57 @@ keep the submit button in center, modernize the button UI-->
 	var password = document.getElementById("add_user_password");
 	var confirm_password = document.getElementById("add_user_confirm_password");
 	var submit = document.getElementById("add_user_submit");
+	
+	var view = document.getElementById("add_view");
+	var download = document.getElementById("add_download");
+	var modify = document.getElementById("add_modify");
+	var delete_ = document.getElementById("add_delete");
+	var upload = document.getElementById("add_upload");
+	var zip = document.getElementById("add_zip");
+	var admin = document.getElementById("add_admin");
+	var path_list = document.getElementById("add_path_list");
+	var add_path_btn = document.getElementById("add_add_path_btn");
+
+	function create_path_row() {
+		var row = document.createElement("div");
+		row.className = "path_row";
+		
+		var path_input = document.createElement("input");
+		path_input.type = "text";
+		path_input.placeholder = "/Folder";
+		
+		var subdirs_select = document.createElement("select");
+		subdirs_select.innerHTML = '<option value="true">Recursive</option><option value="false">Exact</option>';
+		
+		var type_select = document.createElement("select");
+		type_select.innerHTML = '<option value="allow">Allow</option><option value="deny">Deny</option>';
+		
+		var del_btn = document.createElement("button");
+		del_btn.type = "button";
+		del_btn.innerText = "X";
+		del_btn.onclick = () => row.remove();
+		
+		row.appendChild(path_input);
+		row.appendChild(subdirs_select);
+		row.appendChild(type_select);
+		row.appendChild(del_btn);
+		
+		path_list.appendChild(row);
+	}
+	
+	add_path_btn.onclick = () => create_path_row();
+	
+	admin.onclick = function() {
+		if (admin.checked) {
+			view.checked = true;
+			download.checked = true;
+			modify.checked = true;
+			delete_.checked = true;
+			upload.checked = true;
+			zip.checked = true;
+		}
+	}
+
 	var submit_status = document.getElementById("add_user_status");
 	const NotUsernameRegex = /[^a-zA-Z0-9_]/g;
 	const note = (msg, color='red') => {
@@ -534,7 +785,33 @@ keep the submit button in center, modernize the button UI-->
 			return false;
 		}
 
-		fetch('/?add_user&username=' + username.value + "&password=" + password.value)
+		var _user = new User();
+		_user.permissions = {
+			"VIEW": view.checked,
+			"DOWNLOAD": download.checked,
+			"MODIFY": modify.checked,
+			"DELETE": delete_.checked,
+			"UPLOAD": upload.checked,
+			"ZIP": zip.checked,
+			"ADMIN": admin.checked,
+			"MEMBER": true
+		};
+		var perms = _user.pack_permissions();
+		
+		var paths_data = [];
+		Array.from(path_list.children).forEach(row => {
+			var path_val = row.children[0].value.trim();
+			if (path_val) {
+				paths_data.push({
+					path: path_val,
+					subdirs: row.children[1].value === "true",
+					type: row.children[2].value
+				});
+			}
+		});
+		var paths = encodeURIComponent(JSON.stringify(paths_data));
+		
+		fetch('/?add_user&username=' + username.value + "&password=" + password.value + "&perms=" + perms + "&allowed_paths=" + paths)
 		.then(response => response.json())
 		.then(data => {
 			popup_msg.createPopup(data["status"], data["message"]);

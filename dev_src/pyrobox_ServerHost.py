@@ -223,8 +223,21 @@ class ServerHost(SH_base):
 	"""
 	Just a wrapper for SH_base to add some extra functionality
 	"""
+	server_config: ServerConfig = None
+
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
+
+	def do_HANDLE(self, method: str):
+		req_path = urllib.parse.urlsplit(self.path).path
+		
+		if self.server_config:
+			user, cookie = self.server_config.authorize_user(self)
+			if user and not user.is_path_allowed(req_path):
+				self.send_error(HTTPStatus.NOT_FOUND, "File not found", cookie=cookie)
+				return
+			
+		super().do_HANDLE(method)
 
 
 	def html_main_page(self, user:User, *args, cookie:Union[SimpleCookie, str]=None,  **kwargs):
