@@ -44,7 +44,7 @@ For each task in the inventory:
 |---|---|---|---|---|---|
 | **1.1** | Session Rotation, Invalidation on Logout, Cookie Flags | `user_mgmt.py`, `server.py` | `[x] COMMITTED` | `5a6d730` | Implemented cryptographically secure tokens (`secrets.token_bytes(32)`), token rotation on login, server-side revocation on logout, and `HttpOnly`/`SameSite=Lax` cookie flags |
 | **1.2** | Upgrade Password Hashing to Salted Scrypt | `user_mgmt.py` | `[x] COMMITTED` | `7168834` | Replaced single-round SHA-256 with per-user salted `scrypt` (PBKDF2 fallback) + transparent auto-upgrade on login |
-| **2.6** | Prevent Username Enumeration in Login | `server.py` (`?do_login`) | `[ ] PENDING` | - | Standardize failure message to `"Invalid username or password"` |
+| **2.6** | Prevent Username Enumeration in Login | `server.py`, `user_mgmt.py` | `[x] COMMITTED` | `e7a8d05` | Standardized login failure responses across `server.py` and `user_mgmt.py` to `"Invalid username or password"` |
 
 ### Phase 3: Defaults, DoS Mitigation & Security Headers
 | ID | Description | Affected Files | Status | Commit SHA | Notes |
@@ -147,6 +147,16 @@ For each task in the inventory:
   - Replaced single-round SHA-256 password hashing with per-user salted `scrypt` (16-byte random salt, N=16384, r=8, p=1) and PBKDF2-HMAC fallback in `dev_src/user_mgmt.py`.
   - Implemented transparent backward compatibility with legacy SHA-256 hashes, auto-upgrading to salted scrypt upon successful password verification.
   - Added test suite `TestPasswordHashingScrypt` in `dev_src/tests/test_accounts_permissions.py` covering scrypt hashing, unique per-user salts, and legacy hash transparent auto-upgrade.
+- **Verification**:
+  - `ruff check dev_src`: Passed (0 errors).
+  - `pytest dev_src/tests`: Passed 149/149 tests.
+
+### Commit `e7a8d05` - Phase 2 / Step 2.3: Prevent Username Enumeration in Login (Issue 2.6)
+- **Date**: 2026-09-23
+- **Summary**:
+  - Unified failed login error responses across `dev_src/server.py` (`handle_login_post`) and `dev_src/user_mgmt.py` (`server_login`) to `"Invalid username or password"`.
+  - Eliminated account enumeration side-channels that previously allowed attackers to distinguish between nonexistent accounts and valid usernames with bad passwords.
+  - Updated tests in `dev_src/tests/test_accounts_permissions.py` to assert identical error status and message.
 - **Verification**:
   - `ruff check dev_src`: Passed (0 errors).
   - `pytest dev_src/tests`: Passed 149/149 tests.
