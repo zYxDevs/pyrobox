@@ -42,6 +42,64 @@ from pyroboxCore import logger
 from pyroDB3 import PickleTable
 from data_types import LimitedDict
 
+
+def hash_password(password: str) -> bytes:
+	"""Hash password with per-user salt using scrypt (or PBKDF2-HMAC fallback)."""
+	salt = secrets.token_bytes(16)
+	salt_hex = binascii.hexlify(salt).decode("ascii")
+	try:
+		key = hashlib.scrypt(password.encode("utf-8"), salt=salt, n=16384, r=8, p=1)
+		key_hex = binascii.hexlify(key).decode("ascii")
+		return f"scrypt$16384$8$1${salt_hex}${key_hex}".encode("ascii")
+	except (AttributeError, ValueError):
+		key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 100000)
+		key_hex = binascii.hexlify(key).decode("ascii")
+		return f"pbkdf2$100000$sha256${salt_hex}${key_hex}".encode("ascii")
+
+
+def verify_password(stored: Union[bytes, str, None], password: str, common_salt: str = "0123456789") -> Tuple[bool, bool]:
+	"""
+	Verify password against stored hash.
+	Returns: (is_valid: bool, needs_rehash: bool)
+	"""
+	if not stored or not password:
+		return False, False
+
+	if isinstance(stored, str):
+		stored = stored.encode("ascii", errors="ignore")
+
+	if stored.startswith(b"scrypt$"):
+		try:
+			parts = stored.split(b"$")
+			n = int(parts[1])
+			r = int(parts[2])
+			p = int(parts[3])
+			salt = binascii.unhexlify(parts[4])
+			expected_key = binascii.unhexlify(parts[5])
+			computed_key = hashlib.scrypt(password.encode("utf-8"), salt=salt, n=n, r=r, p=p)
+			return compare_digest(computed_key, expected_key), False
+		except Exception:
+			return False, False
+
+	if stored.startswith(b"pbkdf2$"):
+		try:
+			parts = stored.split(b"$")
+			iterations = int(parts[1])
+			hash_name = parts[2].decode("ascii")
+			salt = binascii.unhexlify(parts[3])
+			expected_key = binascii.unhexlify(parts[4])
+			computed_key = hashlib.pbkdf2_hmac(hash_name, password.encode("utf-8"), salt, iterations)
+			return compare_digest(computed_key, expected_key), False
+		except Exception:
+			return False, False
+
+	# Legacy single-round SHA-256 fallback (needs rehash)
+	legacy_hash = hashlib.sha256((common_salt + password).encode("utf-8")).digest()
+	if compare_digest(stored, legacy_hash):
+		return True, True
+
+	return False, False
+
 # Loads user database. Passwords are hashed with User_handler.common_salt.
 
 
@@ -257,7 +315,7 @@ class User:
 
 	def set_password(self, password:str) -> None:
 		# salt, hash and store password
-		p_hash = self.salt_password(password)
+		p_hash = hash_password(password)
 		self.update("password", p_hash)
 		self.generate_new_token()
 
@@ -277,9 +335,8 @@ class User:
 
 		if self.check_password(old_password):
 			logger.info(f"Updating password of user {self.username}")
-			salted_new_password = self.salt_password(new_password)
-
-			self.update("password", salted_new_password)
+			self.update("password", hash_password(new_password))
+			self.generate_new_token()
 			return True
 		else:
 			logger.info(f"User {self.username} password mismatch")
@@ -447,8 +504,11 @@ class User:
 		Returns:
 			bool: Was password valid?
 		"""
-		salted_new_password = self.salt_password(password)
-		return compare_digest(self.password, salted_new_password)
+		common_salt = getattr(getattr(self, "user_handler", None), "common_salt", "0123456789")
+		valid, needs_rehash = verify_password(self.password, password, common_salt=common_salt)
+		if valid and needs_rehash:
+			self.update("password", hash_password(password))
+		return valid
 
 	def check_token(self, token) -> bool:
 		"""match cookie token (hex str) with db["token"] (digest binary)

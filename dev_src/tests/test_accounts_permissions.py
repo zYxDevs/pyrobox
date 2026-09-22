@@ -245,3 +245,37 @@ class TestSessionTokenAndCookieSecurity:
 		assert cookie['permissions']['samesite'].lower() == 'lax'
 
 
+class TestPasswordHashingScrypt:
+	def test_password_stored_as_scrypt(self, member_user):
+		assert member_user.password.startswith(b'scrypt$') or member_user.password.startswith(b'pbkdf2$')
+		assert member_user.check_password('secret123') is True
+		assert member_user.check_password('wrong_password') is False
+
+	def test_different_users_get_unique_salts(self, user_handler):
+		u1 = user_handler.create_user('user1', 'common_pass')
+		u2 = user_handler.create_user('user2', 'common_pass')
+		# Same plaintext password must yield different hash outputs due to per-user random salt
+		assert u1.password != u2.password
+		assert u1.check_password('common_pass') is True
+		assert u2.check_password('common_pass') is True
+
+	def test_legacy_sha256_transparent_auto_upgrade(self, member_user):
+		import hashlib
+		common_salt = member_user.user_handler.common_salt
+		# Simulate a legacy single-round SHA-256 password hash in the database
+		legacy_hash = hashlib.sha256((common_salt + 'legacy_secret').encode('utf-8')).digest()
+		member_user.update('password', legacy_hash)
+
+		assert member_user.password == legacy_hash
+		assert not member_user.password.startswith(b'scrypt$')
+
+		# Authenticating with the correct password succeeds
+		assert member_user.check_password('legacy_secret') is True
+
+		# And automatically upgraded the stored password to salted scrypt!
+		assert member_user.password != legacy_hash
+		assert member_user.password.startswith(b'scrypt$') or member_user.password.startswith(b'pbkdf2$')
+		assert member_user.check_password('legacy_secret') is True
+
+
+
