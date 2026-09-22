@@ -198,4 +198,16 @@ For each task in the inventory:
   - `ruff check dev_src`: Passed (0 errors).
   - `pytest dev_src/tests`: Passed 157/157 tests.
 
+### Commit `46fa9dc` - Bugfix: Root Directory Upload Validation & Client Leading Slash Handling
+- **Date**: 2026-09-23
+- **Summary**:
+  - Fixed a regression where uploading files to the root directory (`/`) caused `os.path.dirname(os_f_path)` to evaluate to `""`, causing `path_is_under_directory` to return `False` and reject uploads with `400 Invalid Path`.
+  - Updated `resolve_child_path` in `dev_src/pyroboxCore.py` to return `os.path.abspath(fs_path)` matching its API docstring specification.
+  - Added fallback `f_dir = os.path.dirname(os_f_path) or os.path.abspath(self.directory)` in `dev_src/server.py` (`upload`).
+  - Stripped leading slashes in `dev_src/script_file_list.js` from HTML5 directory drag-and-drop `fullPath` and uploaded file paths.
+  - Added unit test `test_resolve_child_path_when_directory_is_dot` in `dev_src/tests/test_upload_path_resolve.py`.
+- **Verification**:
+  - `ruff check dev_src`: Passed (0 errors).
+  - `pytest dev_src/tests`: Passed 158/158 tests.
+
 
