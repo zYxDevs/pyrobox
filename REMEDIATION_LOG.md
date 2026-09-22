@@ -50,7 +50,7 @@ For each task in the inventory:
 | ID | Description | Affected Files | Status | Commit SHA | Notes |
 |---|---|---|---|---|---|
 | **1.4** | Insecure Defaults (Upload password, guest permissions) | `pyrobox_ServerHost.py`, `_arg_parser.py` | `[x] COMMITTED` | `13d4493` | Default guest to read-only; generate random upload password fallback if omitted |
-| **2.4** | DoS Mitigations (Subtitle map leak, unbounded tree walk) | `server.py`, `_sub_extractor.py` | `[ ] PENDING` | - | Add bounded dict / TTL for subtitles and QR codes |
+| **2.4** | DoS Mitigations (Subtitle map leak, unbounded tree walk) | `server.py`, `_fs_utils.py` | `[x] COMMITTED` | `e22b480` | Added LRU eviction for subtitles, in-memory QR cache, bounded directory walks |
 | **2.7** | Missing HTTP Security Headers | `pyroboxCore.py` | `[ ] PENDING` | - | Add `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` |
 
 ---
@@ -173,5 +173,16 @@ For each task in the inventory:
 - **Verification**:
   - `ruff check dev_src`: Passed (0 errors).
   - `pytest dev_src/tests`: Passed 153/153 tests.
+
+### Commit `e22b480` - Phase 3 / Step 3.2: DoS Mitigations for Subtitles, QR Code, and Tree Walks (Issue 2.4)
+- **Date**: 2026-09-23
+- **Summary**:
+  - Replaced disk-backed `/?qr` generation in `dev_src/server.py` with an in-memory `@functools.lru_cache(maxsize=64)` buffer generator (`io.BytesIO`), completely eliminating disk exhaustion and leftover temporary SVG files.
+  - Bounded `subtitle_location_map` to `MAX_SUBTITLE_ENTRIES = 256` using an `OrderedDict` with LRU eviction and automatic deletion of evicted temporary `.vtt` files from `CoreConfig.temp_dir`.
+  - Added `max_count=50000` bound to `_get_tree_count_n_size` and `get_tree_count_n_size` in `dev_src/_fs_utils.py` to prevent CPU exhaustion and infinite loops during synchronous directory tree walks.
+  - Added unit test suite `dev_src/tests/test_dos_mitigations.py` covering in-memory QR caching, subtitle LRU eviction, and tree walk bounds.
+- **Verification**:
+  - `ruff check dev_src`: Passed (0 errors).
+  - `pytest dev_src/tests`: Passed 156/156 tests.
 
 
