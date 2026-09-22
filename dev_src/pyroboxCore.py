@@ -1022,12 +1022,25 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
 			elif value.lower() == 'keep-alive':
 				self.close_connection = False
 
+	def _has_header(self, keyword):
+		if not hasattr(self, '_headers_buffer'):
+			return False
+		prefix = (keyword.lower() + ":").encode('utf-8')
+		return any(h.lower().startswith(prefix) for h in self._headers_buffer)
+
 	def end_headers(self):
 		"""Send the blank line ending the MIME headers."""
 
 		CORS_POLICY = self.allowed_CORS(self.method)
 		if self.allowed_CORS(self.method):
 			self.send_header('Access-Control-Allow-Origin', CORS_POLICY)
+
+		if not self._has_header('X-Content-Type-Options'):
+			self.send_header('X-Content-Type-Options', 'nosniff')
+		if not self._has_header('X-Frame-Options'):
+			self.send_header('X-Frame-Options', 'SAMEORIGIN')
+		if not self._has_header('Referrer-Policy'):
+			self.send_header('Referrer-Policy', 'strict-origin-when-cross-origin')
 
 		if self.request_version != 'HTTP/0.9':
 			self._headers_buffer.append(b"\r\n")

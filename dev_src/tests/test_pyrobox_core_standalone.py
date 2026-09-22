@@ -52,3 +52,30 @@ def test_deal_post_data_check_size_limit():
 	with pytest.raises(PostError):
 		dpd.check_size_limit(max_size=499)
 
+
+def test_security_headers_emitted_in_end_headers():
+	from pyroboxCore import SimpleHTTPRequestHandler
+	import io
+
+	class MockHandler(SimpleHTTPRequestHandler):
+		def __init__(self):
+			self.request_version = 'HTTP/1.1'
+			self.method = 'GET'
+			self._headers_buffer = []
+			self.header_flushed = False
+			self.wfile = io.BytesIO()
+
+		def allowed_CORS(self, method):
+			return None
+
+		def flush_headers(self):
+			self.header_flushed = True
+
+	handler = MockHandler()
+	handler.end_headers()
+
+	buffer_text = b"".join(handler._headers_buffer).decode("utf-8")
+	assert "X-Content-Type-Options: nosniff\r\n" in buffer_text
+	assert "X-Frame-Options: SAMEORIGIN\r\n" in buffer_text
+	assert "Referrer-Policy: strict-origin-when-cross-origin\r\n" in buffer_text
+
