@@ -33,7 +33,7 @@ For each task in the inventory:
 ### Phase 1: High & Critical Authorization & Injection Fixes
 | ID | Description | Affected Files | Status | Commit SHA | Notes |
 |---|---|---|---|---|---|
-| **2.1** | Stored XSS in Admin User Management | `script_admin_page.js`, `server.py` | `[ ] PENDING` | - | Validate username syntax; sanitize DOM rendering |
+| **2.1** | Stored XSS in Admin User Management | `script_admin_page.js`, `server.py`, `user_mgmt.py` | `[x] COMMITTED` | `8fe3de5` | Username regex validation (`is_valid_username`) + textContent DOM rendering |
 | **1.3** | Path Restriction ACL Bypass on POST Mutations | `server.py` (`del-f`, `del-p`, `rename`, `upload`, etc.) | `[ ] PENDING` | - | Add `user.is_path_allowed()` checks before file modifications |
 | **2.2** | CSRF on Sensitive Admin Endpoints | `server.py` | `[ ] PENDING` | - | Convert `?add_user`, `?delete_user`, `?reload`, `?shutdown` to POST |
 | **2.3** | Plaintext Password Transmission in Query Parameters | `server.py` (`?add_user`) | `[ ] PENDING` | - | Move credentials to request body |
@@ -67,4 +67,19 @@ For each task in the inventory:
 - **Verification**:
   - `ruff check dev_src`: Passed (0 errors).
   - `pytest dev_src/tests`: Passed 121/121 tests.
+
+### Commit `8fe3de5` - Phase 1 / Step 1.1: Stored XSS in Admin User Management (Issue 2.1)
+- **Date**: 2026-09-23
+- **Summary**:
+  - Added strict username validation (`is_valid_username`: 3-32 alphanumeric characters, `_`, `.`, `-`) in `dev_src/user_mgmt.py` (`create_user`, `server_signup`).
+  - Enforced `is_valid_username` in `server.py` (`add_user`, `handle_signup_post`).
+  - Fixed DOM XSS in `dev_src/script_admin_page.js`:
+    - Replaced `row.innerHTML` interpolation in `display_users()` with safe DOM `textContent` and `createElement`.
+    - Avoided template literal script injection `var username = "${username}"` in `manage_user()` by passing via `admin_tools.selected_user`.
+    - Wrapped username query parameters with `encodeURIComponent` across admin API calls.
+  - Added test suite `TestUsernameValidation` in `dev_src/tests/test_accounts_permissions.py` testing XSS payloads and invalid character rejection.
+- **Verification**:
+  - `ruff check dev_src`: Passed (0 errors).
+  - `pytest dev_src/tests`: Passed 138/138 tests.
+
 
