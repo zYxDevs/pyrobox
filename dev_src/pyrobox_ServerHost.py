@@ -172,30 +172,41 @@ class ServerConfig():
 		if self.DefaultPerms["value"].get("guest", None):
 			self.guest_perms = User.unpack_permission_to_list(self.DefaultPerms["value"]["guest"])
 		elif not self.name:
-			# Anonymous server: guests have VIEW, DOWNLOAD, ZIP, and UPLOAD (gated by upload password).
-			# They do NOT have MODIFY or DELETE permissions by default.
+			# Anonymous server: guests have write (MODIFY, DELETE, UPLOAD) and other permissions (VIEW, DOWNLOAD, ZIP),
+			# with upload / save-code operations gated by the session / -k password.
 			self.guest_perms = [
 				permits.VIEW,
 				check(not cli_args.no_upload, permits.UPLOAD),
+				check(not cli_args.no_modify, permits.MODIFY),
+				check(not cli_args.no_delete, permits.DELETE),
 				check(not cli_args.no_zip, permits.ZIP),
 				check(not cli_args.no_download, permits.DOWNLOAD),
 			]
 
 			if cli_args.view_only or cli_args.read_only:
 				remove_perm(self.guest_perms, permits.UPLOAD)
+				remove_perm(self.guest_perms, permits.MODIFY)
+				remove_perm(self.guest_perms, permits.DELETE)
 
 			if cli_args.view_only:
 				remove_perm(self.guest_perms, permits.DOWNLOAD)
 				remove_perm(self.guest_perms, permits.ZIP)
 
 		else:
-			# Named server: unauthenticated guests are read-only (VIEW, DOWNLOAD, ZIP).
-			# They do NOT have UPLOAD, MODIFY, or DELETE permissions.
+			# Named server: guests have write and other permissions when guest_allowed
 			self.guest_perms = [
 				check(cli_args.guest_allowed, permits.VIEW),
-				check(not cli_args.no_zip, permits.ZIP),
-				check(not cli_args.no_download, permits.DOWNLOAD),
+				check(not cli_args.no_upload and cli_args.guest_allowed, permits.UPLOAD),
+				check(not cli_args.no_modify and cli_args.guest_allowed, permits.MODIFY),
+				check(not cli_args.no_delete and cli_args.guest_allowed, permits.DELETE),
+				check(not cli_args.no_zip and cli_args.guest_allowed, permits.ZIP),
+				check(not cli_args.no_download and cli_args.guest_allowed, permits.DOWNLOAD),
 			]
+
+			if cli_args.view_only or cli_args.read_only:
+				remove_perm(self.guest_perms, permits.UPLOAD)
+				remove_perm(self.guest_perms, permits.MODIFY)
+				remove_perm(self.guest_perms, permits.DELETE)
 
 			if cli_args.view_only:
 				remove_perm(self.guest_perms, permits.DOWNLOAD)

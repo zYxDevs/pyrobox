@@ -1157,7 +1157,9 @@ def save_code_file(self: SH, *args, **kwargs):
 	password = form.get_multi_field(verify_name='password', decode=True)[1]
 	self.log_debug(f'code save password attempt by {user.UID}')
 	
-	if (user.MEMBER and not user.check_password(password)) or (not user.MEMBER and password != Sconfig.PASSWORD):
+	# Logged-in members are authenticated via session and do not require entering a password.
+	# Guests require the session / -k password.
+	if not user.MEMBER and password != Sconfig.PASSWORD:
 		self.log_info(f"Incorrect password for code save by {user.UID}")
 		return self.send_json({
 			"status": "error",
@@ -1619,8 +1621,9 @@ def upload(self: SH, *args, **kwargs):
 
 	self.log_debug(f'post password: {[password]} by client')
 
-	# readline returns password with \r\n at end
-	if (user.MEMBER and not user.check_password(password)) or (not user.MEMBER and password != Sconfig.PASSWORD):
+	# Logged-in members are authenticated via session and do not require entering a password.
+	# Guests require the session / -k password.
+	if not user.MEMBER and password != Sconfig.PASSWORD:
 		self.log_info(f"Incorrect password by {uid}")
 
 		return self.send_txt("Incorrect password", code=HTTPStatus.UNAUTHORIZED, cookie=cookie)

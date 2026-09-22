@@ -99,6 +99,11 @@ class UploadManager {
 	createPasswordInput() {
 		const container = createElement("div");
 		container.className = "upload-pass-container";
+
+		// If user is a logged-in member, password is not required
+		if (typeof user !== 'undefined' && user.permissions && user.permissions.MEMBER) {
+			container.style.display = "none";
+		}
 		
 		const label = createElement("span");
 		label.className = "upload-pass-label";
@@ -116,6 +121,20 @@ class UploadManager {
 		input.name = "password";
 		input.placeholder = "Optional";
 		input.className = "upload-pass-box";
+
+		// Remember session / -k password for guest in sessionStorage
+		if (typeof pref_store !== 'undefined') {
+			const savedPass = pref_store.get('upload_pass', '', true);
+			if (savedPass) {
+				input.value = savedPass;
+			}
+			input.addEventListener('change', () => {
+				if (input.value) {
+					pref_store.set('upload_pass', input.value, true);
+				}
+			});
+		}
+
 		wrapper.appendChild(input);
 		
 		const eyeBtn = createElement("button");
@@ -438,6 +457,9 @@ class UploadManager {
 			for (const pair of new FormData(e.target)) {
 				if (pair[0] !== 'file') {
 					formData.append(pair[0], pair[1]);
+				}
+				if (pair[0] === 'password' && pair[1] && typeof pref_store !== 'undefined') {
+					pref_store.set('upload_pass', pair[1], true);
 				}
 			}
 			

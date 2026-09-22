@@ -25,6 +25,16 @@ class CodeEditor_Page extends Page {
 		this.download_btn = byId("editor-download-btn");
 		this.readonly_toggle_btn = byId("editor-toggle-readonly-btn");
 		this.password_input = byId("editor-password-input");
+		if (this.password_input) {
+			if (typeof user !== 'undefined' && user.permissions && user.permissions.MEMBER) {
+				this.password_input.style.display = "none";
+			} else if (typeof pref_store !== 'undefined') {
+				const savedPass = pref_store.get('upload_pass', '', true);
+				if (savedPass && !this.password_input.value) {
+					this.password_input.value = savedPass;
+				}
+			}
+		}
 		this.line_ending_select = byId("editor-line-ending-select");
 		this.unsaved_indicator = byId("editor-unsaved-indicator");
 
@@ -799,6 +809,9 @@ class CodeEditor_Page extends Page {
 				this.current_mod_time = data.mod_time;
 				this.update_unsaved_indicator();
 				this.password_cached = password; // Cache password for next save on this page
+				if (password && typeof pref_store !== 'undefined') {
+					pref_store.set('upload_pass', password, true);
+				}
 				this.show_status("File saved successfully", "success");
 			} else {
 				this.show_status(data.message || "Save failed", "error");

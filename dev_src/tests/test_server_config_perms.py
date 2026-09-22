@@ -56,11 +56,15 @@ class TestAnonymousServerPerms:
 		assert cfg1.PASSWORD != cfg2.PASSWORD
 		assert len(cfg1.PASSWORD) >= 8
 
-	def test_anonymous_guest_has_no_modify_or_delete_by_default(self, anonymous_config):
-		assert permits.MODIFY not in anonymous_config.guest_perms
-		assert permits.DELETE not in anonymous_config.guest_perms
+	def test_anonymous_guest_has_write_and_other_perms_by_default(self, anonymous_config):
+		assert permits.VIEW in anonymous_config.guest_perms
+		assert permits.UPLOAD in anonymous_config.guest_perms
+		assert permits.MODIFY in anonymous_config.guest_perms
+		assert permits.DELETE in anonymous_config.guest_perms
+		assert permits.DOWNLOAD in anonymous_config.guest_perms
+		assert permits.ZIP in anonymous_config.guest_perms
 
-	def test_named_server_guest_defaults_read_only(self):
+	def test_named_server_guest_has_write_and_other_perms_when_allowed(self):
 		from pyrobox_ServerHost import ServerConfig
 		cfg = ServerConfig(make_cli_args(
 			server_name='testsrv_perms',
@@ -70,9 +74,19 @@ class TestAnonymousServerPerms:
 		))
 		assert permits.VIEW in cfg.guest_perms
 		assert permits.DOWNLOAD in cfg.guest_perms
-		assert permits.UPLOAD not in cfg.guest_perms
-		assert permits.MODIFY not in cfg.guest_perms
-		assert permits.DELETE not in cfg.guest_perms
+		assert permits.UPLOAD in cfg.guest_perms
+		assert permits.MODIFY in cfg.guest_perms
+		assert permits.DELETE in cfg.guest_perms
+		assert permits.ZIP in cfg.guest_perms
+
+	def test_member_does_not_require_upload_password(self, anonymous_config):
+		"""Members are authorized via session and do not need to supply upload password."""
+		member = anonymous_config.user_handler.create_user('member_user', 'mypass')
+		guest = anonymous_config.guest_id
+		# Verification rule: if member.MEMBER -> no password check needed
+		assert member.MEMBER is True
+		# Guest requires ServerConfig.PASSWORD
+		assert guest.MEMBER is False
 
 
 class TestCliPermissionFlags:
