@@ -1497,11 +1497,8 @@ def handle_login_post(self: SH, *args, **kwargs):
 		return self.send_json({"status": "failed", "message": "Password not provided"}, cookie=cookie)
 
 	user = Sconfig.user_handler.get_user(username)
-	if not user:
-		return self.send_json({"status": "failed", "message": "User not found"}, cookie=cookie)
-
-	if not user.check_password(password):
-		return self.send_json({"status": "failed", "message": "Incorrect password"}, cookie=cookie)
+	if not user or not user.check_password(password):
+		return self.send_json({"status": "failed", "message": "Invalid username or password"}, cookie=cookie)
 
 	user.generate_new_token()
 	cookie = user.create_cookie()

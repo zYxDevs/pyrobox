@@ -103,10 +103,11 @@ class TestAccountsApi:
 
 		bad = user_handler.server_login('bob', 'nope')
 		assert bad['status'] == 'error'
-		assert 'password' in bad['message'].lower() or 'Wrong' in bad['message']
+		assert bad['message'] == "Invalid username or password"
 
 		missing = user_handler.server_login('nobody', 'x')
 		assert missing['status'] == 'error'
+		assert missing['message'] == "Invalid username or password"
 
 	def test_delete_user(self, user_handler, member_user):
 		assert user_handler.delete_user('alice') is True

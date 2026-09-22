@@ -639,16 +639,10 @@ class User_handler:
 
 	def server_login(self, username, password) -> dict:
 		user = self.get_user(username)
-		if user is None:
+		if user is None or not user.check_password(password):
 			return {
 				"status": "error",
-				"message": "User not found"
-			}
-
-		if not user.check_password(password):
-			return {
-				"status": "error",
-				"message": "Wrong password"
+				"message": "Invalid username or password"
 			}
 
 		user.update("last_active", round(datetime.datetime.now(datetime.timezone.utc).timestamp(),2))
