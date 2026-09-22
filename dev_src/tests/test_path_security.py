@@ -109,3 +109,24 @@ class TestJoinAbsoluteDiscard:
 		# On all platforms, absolute second arg wins
 		assert os.path.normpath(joined) == os.path.normpath(absolute)
 		assert not path_is_under_directory(base, joined) or joined == absolute
+
+
+class TestBreadcrumbAttributeEscaping:
+	def test_get_displaypath_escapes_quotes(self, handler):
+		path_with_quotes = '/test"dir\'name/<script>'
+		escaped = handler.get_displaypath(path_with_quotes)
+		assert '"' not in escaped
+		assert "'" not in escaped
+		assert '<' not in escaped
+		assert '&quot;' in escaped
+		assert '&#x27;' in escaped
+
+	def test_dir_navigator_escapes_href_and_names(self):
+		from _fs_utils import dir_navigator
+
+		evil_path = '/folder"onclick="alert(1)/sub\'dir/file.txt'
+		html_nav = dir_navigator(evil_path)
+		# No unescaped double quotes inside href attributes that would allow breakout
+		assert 'onclick="alert(1)' not in html_nav
+		assert '&quot;' in html_nav or '&#x27;' in html_nav
+

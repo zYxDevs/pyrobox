@@ -1991,7 +1991,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 			displaypath = urllib.parse.unquote(url_path)
 
 		if escape_html:
-			displaypath = html.escape(displaypath, quote=False)
+			displaypath = html.escape(displaypath, quote=True)
 
 		return displaypath
 

@@ -15,6 +15,7 @@ File System Utilities
 > Thanks for your help!
 """
 
+import html
 from io import BufferedWriter
 import os
 from queue import Queue
@@ -355,7 +356,9 @@ def dir_navigator(path):
 		names.append(dir)
 
 	for i in range(len(names)):
-		tag = "<a class='dir_turns' href='" + urls[i] + "'>" + names[i] + "</a>"
+		href = html.escape(urls[i], quote=True)
+		name = names[i] if i == 0 else html.escape(names[i])
+		tag = f'<a class="dir_turns" href="{href}">{name}</a>'
 		r.append(tag)
 
 	return '<span class="dir_arrow">&#10151;</span>'.join(r)
