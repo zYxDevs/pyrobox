@@ -197,12 +197,13 @@ def get_dir_size(start_path = '.', limit=None, must_read=False):
 	return _get_tree_size(start_path, limit, must_read)
 
 
-def _get_tree_count_n_size(path):
+def _get_tree_count_n_size(path, max_count=50000):
 	"""
 	Get the size of a directory and all its subdirectories.
 	returns a tuple of (`total file count`, `total folder size`)
 
 	path: path to the directory
+	max_count: maximum number of entries to traverse to prevent DoS
 	"""
 	total = 0
 	count = 0
@@ -214,10 +215,12 @@ def _get_tree_count_n_size(path):
 			continue
 
 		count += 1
+		if max_count and count >= max_count:
+			break
 
 	return count, total
 
-def get_tree_count_n_size(start_path):
+def get_tree_count_n_size(start_path, max_count=50000):
 	"""
 	Get the size of a directory and all its subdirectories.
 	returns a tuple of (`total file count`, `total folder size`)
@@ -225,7 +228,7 @@ def get_tree_count_n_size(start_path):
 	path: path to the directory
 	"""
 
-	return _get_tree_count_n_size(start_path)
+	return _get_tree_count_n_size(start_path, max_count=max_count)
 
 
 def fmbytes(B=0, path=''):

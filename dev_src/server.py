@@ -5,10 +5,13 @@
 # * ADD MORE FILE TYPES
 # * ADD SEARCH
 
+from collections import OrderedDict
 import datetime
+import functools
 import hashlib
 # import subprocess
 import importlib.util
+import io
 import json
 import os
 # import sys
@@ -234,6 +237,13 @@ def get_version(self: SH, *args, **kwargs):
 	return self.send_text(f"{__version__}")
 
 
+@functools.lru_cache(maxsize=64)
+def _generate_qr_svg_bytes(url: str) -> bytes:
+	buf = io.BytesIO()
+	pyqrcode.create(url).svg(buf, scale=5)
+	return buf.getvalue()
+
+
 @SH.on_req('HEAD', hasQ="qr")
 def get_qr(self: SH, *args, **kwargs):
 	"""Return QR code for easy access"""
@@ -251,14 +261,12 @@ def get_qr(self: SH, *args, **kwargs):
 	if len(url) > 2048:
 		return self.send_error(code=HTTPStatus.BAD_REQUEST, message="URL too long", cookie=cookie)
 
-	md5_url = hashlib.md5(url.encode()).hexdigest() + \
-		hashlib.sha256(url.encode()).hexdigest()
-	qr_path = xpath(CoreConfig.temp_dir, f"QR-{md5_url}.svg")
+	try:
+		svg_bytes = _generate_qr_svg_bytes(url)
+	except Exception:
+		return self.send_error(code=HTTPStatus.BAD_REQUEST, message="Invalid URL for QR generation", cookie=cookie)
 
-	if not os.path.exists(qr_path):
-		pyqrcode.create(url).svg(file=qr_path, scale=5)
-
-	return self.send_file(qr_path, cookie=cookie)
+	return self.send_text(svg_bytes, content_type="image/svg+xml; charset=utf-8", cookie=cookie)
 
 
 @SH.on_req('POST', hasQ="reload")
@@ -773,7 +781,19 @@ def send_ls_json(self: SH, *args, **kwargs):
 	return list_directory_json(self, user=user)
 
 
-subtitle_location_map = {}
+subtitle_location_map = OrderedDict()
+MAX_SUBTITLE_ENTRIES = 256
+
+
+def store_subtitle(uuid_key: str, file_path: str):
+	if len(subtitle_location_map) >= MAX_SUBTITLE_ENTRIES:
+		old_id, old_path = subtitle_location_map.popitem(last=False)
+		try:
+			if old_path and os.path.isfile(old_path) and CoreConfig.temp_dir in os.path.abspath(old_path):
+				os.remove(old_path)
+		except OSError:
+			pass
+	subtitle_location_map[uuid_key] = file_path
 
 
 @SH.on_req('HEAD', hasQ=("vid", "vid-data"))
@@ -811,7 +831,7 @@ def send_video_data(self: SH, *args, **kwargs):
 	default_ = True
 	for label, sub_path in subtitles:
 		random_uuid = uuid.uuid4().hex
-		subtitle_location_map[random_uuid] = sub_path
+		store_subtitle(random_uuid, sub_path)
 
 		"""{
 			kind: 'captions',
@@ -863,6 +883,7 @@ def send_subtitle(self: SH, *args, **kwargs):
 		return self.send_error(code=HTTPStatus.NOT_FOUND, message="Subtitle not found", cookie=cookie)
 
 	sub_path = subtitle_location_map[sub_id]
+	subtitle_location_map.move_to_end(sub_id)
 
 	return self.return_file(sub_path, cookie=cookie)
 
