@@ -51,7 +51,7 @@ For each task in the inventory:
 |---|---|---|---|---|---|
 | **1.4** | Insecure Defaults (Upload password, guest permissions) | `pyrobox_ServerHost.py`, `_arg_parser.py` | `[x] COMMITTED` | `13d4493` | Default guest to read-only; generate random upload password fallback if omitted |
 | **2.4** | DoS Mitigations (Subtitle map leak, unbounded tree walk) | `server.py`, `_fs_utils.py` | `[x] COMMITTED` | `e22b480` | Added LRU eviction for subtitles, in-memory QR cache, bounded directory walks |
-| **2.7** | Missing HTTP Security Headers | `pyroboxCore.py` | `[ ] PENDING` | - | Add `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` |
+| **2.7** | Missing HTTP Security Headers | `pyroboxCore.py` | `[x] COMMITTED` | `bfd5509` | Injected `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: strict-origin-when-cross-origin` |
 
 ---
 
@@ -184,5 +184,18 @@ For each task in the inventory:
 - **Verification**:
   - `ruff check dev_src`: Passed (0 errors).
   - `pytest dev_src/tests`: Passed 156/156 tests.
+
+### Commit `bfd5509` - Phase 3 / Step 3.3: Add Defensive HTTP Security Headers (Issue 2.7)
+- **Date**: 2026-09-23
+- **Summary**:
+  - Added helper method `_has_header(keyword)` in `dev_src/pyroboxCore.py` to avoid duplicate header emission.
+  - Injected standard security headers into all HTTP responses via `SimpleHTTPRequestHandler.end_headers()`:
+    - `X-Content-Type-Options: nosniff` (mitigates MIME type confusion and sniffing attacks on uploads)
+    - `X-Frame-Options: SAMEORIGIN` (mitigates clickjacking framing)
+    - `Referrer-Policy: strict-origin-when-cross-origin` (prevents path and token leakage in Referer headers)
+  - Added unit test `test_security_headers_emitted_in_end_headers` in `dev_src/tests/test_pyrobox_core_standalone.py`.
+- **Verification**:
+  - `ruff check dev_src`: Passed (0 errors).
+  - `pytest dev_src/tests`: Passed 157/157 tests.
 
 
