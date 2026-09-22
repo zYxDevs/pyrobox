@@ -210,4 +210,23 @@ For each task in the inventory:
   - `ruff check dev_src`: Passed (0 errors).
   - `pytest dev_src/tests`: Passed 158/158 tests.
 
+### Commit `4fab5b5` - Feature/Security: Guest Write Permissions with Session/-k Password & Member Exemption
+- **Date**: 2026-09-23
+- **Summary**:
+  - Restored write (`permits.MODIFY`, `permits.DELETE`, `permits.UPLOAD`) and other permissions (`permits.VIEW`, `permits.DOWNLOAD`, `permits.ZIP`) for Guest users on anonymous servers and when guests are allowed on named servers.
+  - In `dev_src/server.py` (`upload` and `save_code_file`), updated password validation logic:
+    - Logged-in account members (`user.MEMBER`) are authenticated via their session cookie and do not require entering any upload or code-save password.
+    - Guest users (`not user.MEMBER`) require the session / `-k` password (`Sconfig.PASSWORD`).
+  - In `dev_src/script_file_list.js`:
+    - Hidden the upload password input box for logged-in members (`user.permissions.MEMBER`).
+    - Added sessionStorage caching via `pref_store` so guests who input the session/-k password do not need to retype it for subsequent uploads.
+  - In `dev_src/script_code_editor.js`:
+    - Hidden `editor-password-input` for logged-in members.
+    - Prefilled and persisted the session/-k password via `pref_store` for guest users.
+  - Updated permission unit tests in `dev_src/tests/test_server_config_perms.py` to verify guest write permissions and member password exemption.
+- **Verification**:
+  - `ruff check dev_src`: Passed (0 errors).
+  - `pytest dev_src/tests`: Passed 159/159 tests.
+
+
 
