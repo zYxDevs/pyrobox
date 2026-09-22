@@ -209,3 +209,39 @@ class TestUsernameValidation:
 		from user_mgmt import is_valid_username
 		assert is_valid_username(username)
 
+
+class TestSessionTokenAndCookieSecurity:
+	def test_generate_new_token_rotates_and_invalidates_old(self, member_user):
+		old_token_hex = member_user.token_hex
+		assert len(old_token_hex) == 64  # 32 bytes in hex
+		assert member_user.check_token(old_token_hex) is True
+
+		# Rotate token
+		new_token_hex = member_user.generate_new_token()
+		assert new_token_hex != old_token_hex
+		assert len(new_token_hex) == 64
+
+		# Old token now invalid on server
+		assert member_user.check_token(old_token_hex) is False
+		# New token valid
+		assert member_user.check_token(new_token_hex) is True
+
+	def test_cookie_flags(self, member_user):
+		cookie = create_user_cookie(member_user)
+
+		# token cookie must have HttpOnly and SameSite=Lax
+		assert cookie['token']['httponly'] is True
+		assert cookie['token']['samesite'].lower() == 'lax'
+
+		# user and permissions cookies have SameSite=Lax
+		assert cookie['user']['samesite'].lower() == 'lax'
+		assert cookie['permissions']['samesite'].lower() == 'lax'
+
+	def test_clear_cookie_flags(self):
+		cookie = clear_user_cookie()
+		assert cookie['token']['httponly'] is True
+		assert cookie['token']['samesite'].lower() == 'lax'
+		assert cookie['user']['samesite'].lower() == 'lax'
+		assert cookie['permissions']['samesite'].lower() == 'lax'
+
+

@@ -1,6 +1,7 @@
 # import pickledb
 import hashlib
 import time, datetime
+import secrets
 from secrets import compare_digest
 from enum import Enum
 from typing import Tuple, List, TypeVar, Union, TYPE_CHECKING
@@ -248,15 +249,17 @@ class User:
 	def salt_password(self, password) -> bytes:
 		return hashlib.sha256((self.user_handler.common_salt+password).encode('utf-8')).digest()
 
+	def generate_new_token(self) -> str:
+		"""Generate and store a new cryptographically secure session token."""
+		token = secrets.token_bytes(32)
+		self.update("token", token)
+		return self.token_hex
+
 	def set_password(self, password:str) -> None:
 		# salt, hash and store password
 		p_hash = self.salt_password(password)
-		token = hashlib.sha256(p_hash + str(time.time()).encode()).digest()
-
-		# only store binary data
-
 		self.update("password", p_hash)
-		self.update("token", token)
+		self.generate_new_token()
 
 
 
@@ -687,14 +690,18 @@ def create_user_cookie(user: User) -> SimpleCookie:
 	cookie["user"] = user.username
 	cookie["user"]["expires"] = 365 * 86400
 	cookie["user"]["path"] = "/"
+	cookie["user"]["samesite"] = "Lax"
 
 	cookie["token"] = user.token_hex
 	cookie["token"]["expires"] = 365 * 86400
 	cookie["token"]["path"] = "/"
+	cookie["token"]["httponly"] = True
+	cookie["token"]["samesite"] = "Lax"
 
 	cookie["permissions"] = user.permission_pack
 	cookie["permissions"]["expires"] = 365 * 86400
 	cookie["permissions"]["path"] = "/"
+	cookie["permissions"]["samesite"] = "Lax"
 
 	return cookie
 
@@ -706,6 +713,8 @@ def clear_user_cookie() -> SimpleCookie:
 		cookie[k] = ""
 		cookie[k]["expires"] = -1
 		cookie[k]["path"] = "/"
+		cookie[k]["samesite"] = "Lax"
+	cookie["token"]["httponly"] = True
 	return cookie
 
 

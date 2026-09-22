@@ -1349,6 +1349,9 @@ def logout(self: SH, *args, **kwargs):
 	if not user:
 		return self.redirect("/")
 
+	if not user.is_guest():
+		user.generate_new_token()
+
 	cookie = u_mgmt.clear_user_cookie()
 	return self.send_text(pt.login_page(), cookie=cookie)
 
@@ -1500,6 +1503,7 @@ def handle_login_post(self: SH, *args, **kwargs):
 	if not user.check_password(password):
 		return self.send_json({"status": "failed", "message": "Incorrect password"}, cookie=cookie)
 
+	user.generate_new_token()
 	cookie = user.create_cookie()
 
 	return self.send_json({"status": "success", "message": "Login successful, if not Auto-redirecting, kindly Refresh"}, cookie=cookie)
