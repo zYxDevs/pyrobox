@@ -37,7 +37,7 @@ For each task in the inventory:
 | **1.3** | Path Restriction ACL Bypass on POST Mutations | `server.py` (`del-f`, `del-p`, `rename`, `upload`, etc.) | `[x] COMMITTED` | `671f656` | Enforce `user.is_path_allowed()` on code editor, delete, rename, info, folder, size, and zip operations |
 | **2.2** | CSRF on Sensitive Admin Endpoints | `server.py`, `script_admin_page.js` | `[x] COMMITTED` | `e59664c` | Converted `reload`, `shutdown`, `add_user`, `delete_user`, `update_user_perm` to POST + `Sec-Fetch-Site` check |
 | **2.3** | Plaintext Password Transmission in Query Parameters | `server.py`, `script_admin_page.js` | `[x] COMMITTED` | `e59664c` | Moved `add_user` credentials and permission attributes from URL query into POST multipart body |
-| **2.5** | Attribute Injection in Navigation Breadcrumbs | `_fs_utils.py`, `pyroboxCore.py` | `[ ] PENDING` | - | Escape quotes with `html.escape(quote=True)` |
+| **2.5** | Attribute Injection in Navigation Breadcrumbs | `_fs_utils.py`, `pyroboxCore.py` | `[x] COMMITTED` | `043cd0f` | Escaped HTML quotes (`quote=True`) in `get_displaypath` and `dir_navigator` href attributes |
 
 ### Phase 2: Authentication & Session Hardening
 | ID | Description | Affected Files | Status | Commit SHA | Notes |
@@ -116,5 +116,15 @@ For each task in the inventory:
 - **Verification**:
   - `ruff check dev_src`: Passed (0 errors).
   - `pytest dev_src/tests`: Passed 141/141 tests.
+
+### Commit `043cd0f` - Phase 1 / Step 1.4: Attribute Injection in Breadcrumbs (Issue 2.5)
+- **Date**: 2026-09-23
+- **Summary**:
+  - Set `quote=True` in `SimpleHTTPRequestHandler.get_displaypath` (`pyroboxCore.py:L1994`) so single and double quotes are escaped into `&#x27;` and `&quot;`.
+  - Escaped URLs and directory names in `dir_navigator` (`dev_src/_fs_utils.py:L356`) using `html.escape(..., quote=True)` and double-quoted `href` attributes, eliminating DOM attribute breakout vulnerabilities.
+  - Added test suite `TestBreadcrumbAttributeEscaping` in `dev_src/tests/test_path_security.py` verifying quote escaping in `get_displaypath` and `dir_navigator`.
+- **Verification**:
+  - `ruff check dev_src`: Passed (0 errors).
+  - `pytest dev_src/tests`: Passed 143/143 tests.
 
 
