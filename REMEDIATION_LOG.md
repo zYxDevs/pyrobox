@@ -49,7 +49,7 @@ For each task in the inventory:
 ### Phase 3: Defaults, DoS Mitigation & Security Headers
 | ID | Description | Affected Files | Status | Commit SHA | Notes |
 |---|---|---|---|---|---|
-| **1.4** | Insecure Defaults (Upload password, guest permissions) | `pyrobox_ServerHost.py`, `_arg_parser.py` | `[ ] PENDING` | - | Default guest to read-only; remove hardcoded `"SECret"` fallback |
+| **1.4** | Insecure Defaults (Upload password, guest permissions) | `pyrobox_ServerHost.py`, `_arg_parser.py` | `[x] COMMITTED` | `13d4493` | Default guest to read-only; generate random upload password fallback if omitted |
 | **2.4** | DoS Mitigations (Subtitle map leak, unbounded tree walk) | `server.py`, `_sub_extractor.py` | `[ ] PENDING` | - | Add bounded dict / TTL for subtitles and QR codes |
 | **2.7** | Missing HTTP Security Headers | `pyroboxCore.py` | `[ ] PENDING` | - | Add `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` |
 
@@ -160,5 +160,18 @@ For each task in the inventory:
 - **Verification**:
   - `ruff check dev_src`: Passed (0 errors).
   - `pytest dev_src/tests`: Passed 149/149 tests.
+
+### Commit `13d4493` - Phase 3 / Step 3.1: Remove Hardcoded Upload Password & Restrict Guest Defaults (Issue 1.4)
+- **Date**: 2026-09-23
+- **Summary**:
+  - Changed `--password` / `-k` CLI argument default from hardcoded `"SECret"` to `None` in `dev_src/_arg_parser.py`.
+  - In `dev_src/pyrobox_ServerHost.py`, if no upload password was provided via CLI, generate a random cryptographically secure password via `secrets.token_urlsafe(9)` and log it to stdout. Explicit passwords supplied via CLI continue to be honored.
+  - Restricted default guest permissions in `dev_src/pyrobox_ServerHost.py`:
+    - On anonymous/nameless servers, guests no longer receive `MODIFY` or `DELETE` permissions by default; they retain `VIEW`, `DOWNLOAD`, `ZIP`, and `UPLOAD` (gated by the upload password).
+    - On named/account-based servers, unauthenticated guests default to read-only (`VIEW`, `DOWNLOAD`, `ZIP`) with no mutation permissions (`UPLOAD`, `MODIFY`, `DELETE`).
+  - Added unit tests in `dev_src/tests/test_server_config_perms.py` verifying random upload password generation, explicit password setting, and hardened guest permission defaults.
+- **Verification**:
+  - `ruff check dev_src`: Passed (0 errors).
+  - `pytest dev_src/tests`: Passed 153/153 tests.
 
 
