@@ -39,6 +39,16 @@ class TestResolveChildPath:
 		expected = os.path.abspath(os.path.join(served_dir, 'uploads', 'dir', 'a.txt'))
 		assert os.path.abspath(out) == expected
 
+	def test_resolve_child_path_when_directory_is_dot(self):
+		from pyroboxCore import SimpleHTTPRequestHandler
+		h = SimpleHTTPRequestHandler.__new__(SimpleHTTPRequestHandler)
+		h.directory = '.'
+		out = h.resolve_child_path('/', 'testfile.txt')
+		assert out is not None
+		assert os.path.isabs(out)
+		assert os.path.dirname(out)
+		assert h.path_is_under_directory(os.path.dirname(out))
+
 	def test_absolute_unix_filename_rejected(self, handler, served_dir):
 		# Classic CVE payload: absolute multipart filename
 		target = os.path.abspath(os.path.join(str(served_dir), '..', 'pwned.txt'))

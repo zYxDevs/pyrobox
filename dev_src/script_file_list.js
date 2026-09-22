@@ -304,7 +304,7 @@ class UploadManager {
 
 	async processDirectoryEntry(directoryEntry) {
 		const files = [];
-		const directoryPath = directoryEntry.fullPath || directoryEntry.name;
+		const directoryPath = (directoryEntry.fullPath || directoryEntry.name).replace(/^\/+/, '');
 	
 		const readEntries = (reader) => {
 			return new Promise((resolve) => {
@@ -444,7 +444,7 @@ class UploadManager {
 			// Append all files with their relative paths
 			for (let i = 0; i < this.selected_files.files.length; i++) {
 				const file = this.selected_files.files[i];
-				const path = file._relativePath || file.name;
+				const path = (file._relativePath || file.name).replace(/^\/+/, '');
 				formData.append('file[]', file, path);
 			}
 			

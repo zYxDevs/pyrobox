@@ -2087,7 +2087,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 		fs_path = self.translate_path(joined)
 		if not path_is_under_directory(self.directory, fs_path, resolve_symlinks=False):
 			return None
-		return fs_path
+		return os.path.abspath(fs_path)
 
 	def translate_path(self, path):
 		"""Translate a /-separated PATH to the local filename syntax.

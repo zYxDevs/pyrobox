@@ -1661,7 +1661,7 @@ def upload(self: SH, *args, **kwargs):
 			return self.send_txt("Invalid Path:  " + rltv_path, code=HTTPStatus.BAD_REQUEST, cookie=cookie)
 
 		# make directory if not exists
-		f_dir = os.path.dirname(os_f_path)
+		f_dir = os.path.dirname(os_f_path) or os.path.abspath(self.directory)
 		if not self.path_is_under_directory(f_dir):
 			upload_handler.kill()
 			return self.send_txt("Invalid Path:  " + rltv_path, code=HTTPStatus.BAD_REQUEST, cookie=cookie)
