@@ -34,7 +34,7 @@ For each task in the inventory:
 | ID | Description | Affected Files | Status | Commit SHA | Notes |
 |---|---|---|---|---|---|
 | **2.1** | Stored XSS in Admin User Management | `script_admin_page.js`, `server.py`, `user_mgmt.py` | `[x] COMMITTED` | `8fe3de5` | Username regex validation (`is_valid_username`) + textContent DOM rendering |
-| **1.3** | Path Restriction ACL Bypass on POST Mutations | `server.py` (`del-f`, `del-p`, `rename`, `upload`, etc.) | `[ ] PENDING` | - | Add `user.is_path_allowed()` checks before file modifications |
+| **1.3** | Path Restriction ACL Bypass on POST Mutations | `server.py` (`del-f`, `del-p`, `rename`, `upload`, etc.) | `[x] COMMITTED` | `671f656` | Enforce `user.is_path_allowed()` on code editor, delete, rename, info, folder, size, and zip operations |
 | **2.2** | CSRF on Sensitive Admin Endpoints | `server.py` | `[ ] PENDING` | - | Convert `?add_user`, `?delete_user`, `?reload`, `?shutdown` to POST |
 | **2.3** | Plaintext Password Transmission in Query Parameters | `server.py` (`?add_user`) | `[ ] PENDING` | - | Move credentials to request body |
 | **2.5** | Attribute Injection in Navigation Breadcrumbs | `_fs_utils.py`, `pyroboxCore.py` | `[ ] PENDING` | - | Escape quotes with `html.escape(quote=True)` |
@@ -81,5 +81,23 @@ For each task in the inventory:
 - **Verification**:
   - `ruff check dev_src`: Passed (0 errors).
   - `pytest dev_src/tests`: Passed 138/138 tests.
+
+### Commit `671f656` - Phase 1 / Step 1.2: Path Restriction ACL Bypass (Issue 1.3)
+- **Date**: 2026-09-23
+- **Summary**:
+  - Enforced `user.is_path_allowed()` checks across all mutating and file query endpoints in `dev_src/server.py`:
+    - File upload (`upload`)
+    - Send to recycle bin (`del_2_recycle`)
+    - Permanent file/directory delete (`del_permanently`)
+    - Rename content (`rename_content` - validates both source and destination paths)
+    - Create new folder (`new_folder`)
+    - Get file/folder metadata (`get_info`)
+    - Code editor read (`send_code_data`) and save (`save_code_file`)
+    - Size query endpoints (`get_size`, `get_size_n_count`)
+    - Archive endpoints (`get_zip_id`, `create_zip`, `get_zip`)
+  - Added test suite `TestEndpointAclEnforcement` in `dev_src/tests/test_path_acl.py` verifying ACL enforcement on paths and multi-path operations.
+- **Verification**:
+  - `ruff check dev_src`: Passed (0 errors).
+  - `pytest dev_src/tests`: Passed 140/140 tests.
 
 
