@@ -130,3 +130,23 @@ class TestAuthorizePrefersCookie:
 		user, _ = anonymous_config.authorize_user(req)
 		assert user.username == 'carol'
 		assert user.MEMBER is True
+
+
+class TestAdminEndpointsMethodSecurity:
+	def test_sensitive_admin_endpoints_require_post(self):
+		import server  # noqa: F401
+		from pyroboxCore import SimpleHTTPRequestHandler
+
+		post_funcs = {func.__name__ for case, func in SimpleHTTPRequestHandler.handlers.get('POST', [])}
+		head_funcs = {func.__name__ for case, func in SimpleHTTPRequestHandler.handlers.get('HEAD', [])}
+
+		sensitive_actions = {'reload', 'shutdown', 'add_user', 'delete_user', 'update_user_perm'}
+
+		# Must be registered for POST
+		for action in sensitive_actions:
+			assert action in post_funcs, f"Action {action} should be registered for POST"
+
+		# Must NOT be registered for GET/HEAD
+		for action in sensitive_actions:
+			assert action not in head_funcs, f"Action {action} must NOT be callable via GET/HEAD"
+

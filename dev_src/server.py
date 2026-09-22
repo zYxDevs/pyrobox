@@ -261,9 +261,9 @@ def get_qr(self: SH, *args, **kwargs):
 	return self.send_file(qr_path, cookie=cookie)
 
 
-@SH.on_req('HEAD', hasQ="reload")
+@SH.on_req('POST', hasQ="reload")
 def reload(self: SH, *args, **kwargs):
-	# RELOADS THE SERVER BY RE-READING THE FILE, BEST FOR TESTING REMOTELY. VULNERABLE
+	# RELOADS THE SERVER BY RE-READING THE FILE, BEST FOR TESTING REMOTELY.
 	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:
@@ -271,6 +271,10 @@ def reload(self: SH, *args, **kwargs):
 
 	if not user.is_admin():
 		return self.send_error(code=HTTPStatus.UNAUTHORIZED, message="You are not authorized to perform this action", cookie=cookie)
+
+	sec_fetch = self.headers.get('Sec-Fetch-Site', '').lower()
+	if sec_fetch == 'cross-site':
+		return self.send_error(code=HTTPStatus.FORBIDDEN, message="Cross-site request blocked", cookie=cookie)
 
 	CoreConfig.reload = True
 	self.send_text("Reload initiated", cookie=cookie)
@@ -278,9 +282,9 @@ def reload(self: SH, *args, **kwargs):
 	reload_server()
 
 
-@SH.on_req('HEAD', hasQ="shutdown")
+@SH.on_req('POST', hasQ="shutdown")
 def shutdown(self: SH, *args, **kwargs):
-	# SHUTS DOWN THE SERVER. VULNERABLE
+	# SHUTS DOWN THE SERVER.
 	user, cookie = Sconfig.authorize_user(self)
 
 	if not user:
@@ -288,6 +292,10 @@ def shutdown(self: SH, *args, **kwargs):
 
 	if not user.is_admin():
 		return self.send_error(code=HTTPStatus.UNAUTHORIZED, message="You are not authorized to perform this action", cookie=cookie)
+
+	sec_fetch = self.headers.get('Sec-Fetch-Site', '').lower()
+	if sec_fetch == 'cross-site':
+		return self.send_error(code=HTTPStatus.FORBIDDEN, message="Cross-site request blocked", cookie=cookie)
 
 	self.send_text("Shut down initiated", cookie=cookie)
 	self.server.shutdown()
@@ -320,7 +328,7 @@ def get_users(self: SH, *args, **kwargs):
 	return self.send_json(Sconfig.get_users(), cookie=cookie)
 
 
-@SH.on_req('HEAD', hasQ="update_user_perm")
+@SH.on_req('POST', hasQ="update_user_perm")
 def update_user_perm(self: SH, *args, **kwargs):
 	user, cookie = Sconfig.authorize_user(self)
 
@@ -330,12 +338,19 @@ def update_user_perm(self: SH, *args, **kwargs):
 	if not user.is_admin():
 		return self.send_error(code=HTTPStatus.UNAUTHORIZED, message="You are not authorized to perform this action", cookie=cookie)
 
-	query = self.query
-	username = query.get("username", [None])[0]
-	permission = query.get("perms", [None])[0]
-	
-	allowed_paths_raw = query.get("allowed_paths", [None])[0]
-	if allowed_paths_raw is not None:
+	sec_fetch = self.headers.get('Sec-Fetch-Site', '').lower()
+	if sec_fetch == 'cross-site':
+		return self.send_error(code=HTTPStatus.FORBIDDEN, message="Cross-site request blocked", cookie=cookie)
+
+	post = DPD(self)
+	uid = AUTHORIZE_POST(self, post, 'update_user_perm')
+	form = post.form
+
+	username = form.get_multi_field(verify_name='username', decode=T)[1]
+	permission = form.get_multi_field(verify_name='perms', decode=T)[1]
+	allowed_paths_raw = form.get_multi_field(verify_name='allowed_paths', decode=T)[1]
+
+	if allowed_paths_raw:
 		try:
 			allowed_paths = json.loads(urllib.parse.unquote(allowed_paths_raw))
 		except Exception:
@@ -348,7 +363,7 @@ def update_user_perm(self: SH, *args, **kwargs):
 	except Exception:
 		permission = None
 
-	if not (username is not None and permission is not None):
+	if not (username and permission is not None):
 		return self.send_json({"status": "Failed", "message": "Username or permission not provided"}, cookie=cookie)
 
 	USER = Sconfig.user_handler.get_user(username, temp=True)
@@ -394,7 +409,7 @@ def get_user_perm(self: SH, *args, **kwargs):
 	}, cookie=cookie)
 
 
-@SH.on_req('HEAD', hasQ="add_user")  # added by Admin
+@SH.on_req('POST', hasQ="add_user")  # added by Admin
 def add_user(self: SH, *args, **kwargs):
 	"""Add a user"""
 	user, cookie = Sconfig.authorize_user(self)
@@ -405,12 +420,20 @@ def add_user(self: SH, *args, **kwargs):
 	if not user.is_admin():
 		return self.send_error(code=HTTPStatus.UNAUTHORIZED, message="You are not authorized to perform this action", cookie=cookie)
 
-	username = self.query.get("username", [None])[0]
-	password = self.query.get("password", [None])[0]
-	permission = self.query.get("perms", [None])[0]
-	
-	allowed_paths_raw = self.query.get("allowed_paths", [None])[0]
-	if allowed_paths_raw is not None:
+	sec_fetch = self.headers.get('Sec-Fetch-Site', '').lower()
+	if sec_fetch == 'cross-site':
+		return self.send_error(code=HTTPStatus.FORBIDDEN, message="Cross-site request blocked", cookie=cookie)
+
+	post = DPD(self)
+	uid = AUTHORIZE_POST(self, post, 'add_user')
+	form = post.form
+
+	username = form.get_multi_field(verify_name='username', decode=T)[1]
+	password = form.get_multi_field(verify_name='password', decode=T)[1]
+	permission = form.get_multi_field(verify_name='perms', decode=T)[1]
+	allowed_paths_raw = form.get_multi_field(verify_name='allowed_paths', decode=T)[1]
+
+	if allowed_paths_raw:
 		try:
 			allowed_paths = json.loads(urllib.parse.unquote(allowed_paths_raw))
 		except Exception:
@@ -443,7 +466,7 @@ def add_user(self: SH, *args, **kwargs):
 	return self.send_json({"status": True, "message": f"<h2>User created.</h2> UID: {new_user.uid}"}, cookie=cookie)
 
 
-@SH.on_req('HEAD', hasQ="delete_user")
+@SH.on_req('POST', hasQ="delete_user")
 def delete_user(self: SH, *args, **kwargs):
 	"""Delete a user"""
 	user, cookie = Sconfig.authorize_user(self)
@@ -454,7 +477,15 @@ def delete_user(self: SH, *args, **kwargs):
 	if not user.is_admin():
 		return self.send_error(HTTPStatus.UNAUTHORIZED, "You are not authorized to perform this action", cookie=cookie)
 
-	username = self.query.get("username", [None])[0]
+	sec_fetch = self.headers.get('Sec-Fetch-Site', '').lower()
+	if sec_fetch == 'cross-site':
+		return self.send_error(code=HTTPStatus.FORBIDDEN, message="Cross-site request blocked", cookie=cookie)
+
+	post = DPD(self)
+	uid = AUTHORIZE_POST(self, post, 'delete_user')
+	form = post.form
+
+	username = form.get_multi_field(verify_name='username', decode=T)[1]
 
 	if not username:
 		return self.send_json({"status": False, "message": "Username not provided"}, cookie=cookie)

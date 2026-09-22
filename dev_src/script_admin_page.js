@@ -414,9 +414,18 @@ keep the submit button in center, modernize the button UI-->
 				});
 			}
 		});
-		var paths = encodeURIComponent(JSON.stringify(paths_data));
+		var paths = JSON.stringify(paths_data);
 
-		fetch('/?update_user_perm&username=' + encodeURIComponent(username) + "&perms=" + perms + "&allowed_paths=" + paths)
+		const formData = new FormData();
+		formData.append("post-type", "update_user_perm");
+		formData.append("username", username);
+		formData.append("perms", perms);
+		formData.append("allowed_paths", paths);
+
+		fetch('/?update_user_perm', {
+			method: 'POST',
+			body: formData
+		})
 		.then(response => response.json())
 		.then(data => {
 			if (data.self_kick) {
@@ -458,7 +467,14 @@ keep the submit button in center, modernize the button UI-->
 		var username = this.user_list[index];
 		r_u_sure({
 			y: () => {
-				fetch('/?delete_user&username=' + encodeURIComponent(username))
+				const formData = new FormData();
+				formData.append("post-type", "delete_user");
+				formData.append("username", username);
+
+				fetch('/?delete_user', {
+					method: 'POST',
+					body: formData
+				})
 					.then(response => response.json())
 					.then(data => {
 						if (data.status) {
@@ -479,7 +495,7 @@ keep the submit button in center, modernize the button UI-->
 	request_reload() {
 		r_u_sure({
 			y: () => {
-				fetch('/?reload')
+				fetch('/?reload', { method: 'POST' })
 					.then(response => response.text())
 					.then(data => {
 						popup_msg.createPopup(data)
@@ -493,7 +509,7 @@ keep the submit button in center, modernize the button UI-->
 	request_shutdown() {
 		r_u_sure({
 			y: () => {
-				fetch('/?shutdown')
+				fetch('/?shutdown', { method: 'POST' })
 					.then(response => response.text())
 					.then(data => {
 						popup_msg.createPopup(data)
@@ -819,9 +835,19 @@ keep the submit button in center, modernize the button UI-->
 				});
 			}
 		});
-		var paths = encodeURIComponent(JSON.stringify(paths_data));
-		
-		fetch('/?add_user&username=' + username.value + "&password=" + password.value + "&perms=" + perms + "&allowed_paths=" + paths)
+		var paths = JSON.stringify(paths_data);
+
+		const formData = new FormData();
+		formData.append("post-type", "add_user");
+		formData.append("username", username.value);
+		formData.append("password", password.value);
+		formData.append("perms", perms);
+		formData.append("allowed_paths", paths);
+
+		fetch('/?add_user', {
+			method: 'POST',
+			body: formData
+		})
 		.then(response => response.json())
 		.then(data => {
 			popup_msg.createPopup(data["status"], data["message"]);
