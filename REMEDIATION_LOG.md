@@ -42,7 +42,7 @@ For each task in the inventory:
 ### Phase 2: Authentication & Session Hardening
 | ID | Description | Affected Files | Status | Commit SHA | Notes |
 |---|---|---|---|---|---|
-| **1.1** | Session Rotation, Invalidation on Logout, Cookie Flags | `user_mgmt.py`, `server.py` | `[ ] PENDING` | - | Add token rotation on login, server-side revocation on logout, `HttpOnly`/`SameSite` |
+| **1.1** | Session Rotation, Invalidation on Logout, Cookie Flags | `user_mgmt.py`, `server.py` | `[x] COMMITTED` | `5a6d730` | Implemented cryptographically secure tokens (`secrets.token_bytes(32)`), token rotation on login, server-side revocation on logout, and `HttpOnly`/`SameSite=Lax` cookie flags |
 | **1.2** | Upgrade Password Hashing to Salted Scrypt | `user_mgmt.py` | `[ ] PENDING` | - | Replace single-round SHA-256 with per-user salted `hashlib.scrypt` |
 | **2.6** | Prevent Username Enumeration in Login | `server.py` (`?do_login`) | `[ ] PENDING` | - | Standardize failure message to `"Invalid username or password"` |
 
@@ -126,5 +126,19 @@ For each task in the inventory:
 - **Verification**:
   - `ruff check dev_src`: Passed (0 errors).
   - `pytest dev_src/tests`: Passed 143/143 tests.
+
+### Commit `5a6d730` - Phase 2 / Step 2.1: Session Token Rotation, Revocation & Cookie Flags (Issue 1.1)
+- **Date**: 2026-09-23
+- **Summary**:
+  - Added `User.generate_new_token()` using `secrets.token_bytes(32)` (256-bit cryptographically secure entropy).
+  - Enforced session token rotation upon each successful login in `dev_src/server.py` (`handle_login_post`).
+  - Enforced server-side session token invalidation upon user logout in `dev_src/server.py` (`logout`), invalidating the token in database.
+  - Hardened cookie flags in `dev_src/user_mgmt.py`:
+    - `cookie['token']['httponly'] = True` to prevent JavaScript/XSS theft of session token.
+    - `cookie['token']['samesite'] = 'Lax'` on token, user, and permissions cookies.
+  - Added test suite `TestSessionTokenAndCookieSecurity` in `dev_src/tests/test_accounts_permissions.py`.
+- **Verification**:
+  - `ruff check dev_src`: Passed (0 errors).
+  - `pytest dev_src/tests`: Passed 146/146 tests.
 
 
