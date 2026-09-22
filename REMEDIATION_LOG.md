@@ -35,8 +35,8 @@ For each task in the inventory:
 |---|---|---|---|---|---|
 | **2.1** | Stored XSS in Admin User Management | `script_admin_page.js`, `server.py`, `user_mgmt.py` | `[x] COMMITTED` | `8fe3de5` | Username regex validation (`is_valid_username`) + textContent DOM rendering |
 | **1.3** | Path Restriction ACL Bypass on POST Mutations | `server.py` (`del-f`, `del-p`, `rename`, `upload`, etc.) | `[x] COMMITTED` | `671f656` | Enforce `user.is_path_allowed()` on code editor, delete, rename, info, folder, size, and zip operations |
-| **2.2** | CSRF on Sensitive Admin Endpoints | `server.py` | `[ ] PENDING` | - | Convert `?add_user`, `?delete_user`, `?reload`, `?shutdown` to POST |
-| **2.3** | Plaintext Password Transmission in Query Parameters | `server.py` (`?add_user`) | `[ ] PENDING` | - | Move credentials to request body |
+| **2.2** | CSRF on Sensitive Admin Endpoints | `server.py`, `script_admin_page.js` | `[x] COMMITTED` | `e59664c` | Converted `reload`, `shutdown`, `add_user`, `delete_user`, `update_user_perm` to POST + `Sec-Fetch-Site` check |
+| **2.3** | Plaintext Password Transmission in Query Parameters | `server.py`, `script_admin_page.js` | `[x] COMMITTED` | `e59664c` | Moved `add_user` credentials and permission attributes from URL query into POST multipart body |
 | **2.5** | Attribute Injection in Navigation Breadcrumbs | `_fs_utils.py`, `pyroboxCore.py` | `[ ] PENDING` | - | Escape quotes with `html.escape(quote=True)` |
 
 ### Phase 2: Authentication & Session Hardening
@@ -99,5 +99,22 @@ For each task in the inventory:
 - **Verification**:
   - `ruff check dev_src`: Passed (0 errors).
   - `pytest dev_src/tests`: Passed 140/140 tests.
+
+### Commit `e59664c` - Phase 1 / Step 1.3: CSRF & Plaintext Passwords in Admin Endpoints (Issues 2.2 & 2.3)
+- **Date**: 2026-09-23
+- **Summary**:
+  - Converted mutating admin operations from `HEAD`/`GET` to `POST` in `dev_src/server.py`:
+    - `reload`
+    - `shutdown`
+    - `add_user`
+    - `delete_user`
+    - `update_user_perm`
+  - Added `Sec-Fetch-Site: cross-site` defense-in-depth CSRF blocking across all admin mutation endpoints.
+  - Moved sensitive credentials (`password`) and attributes (`username`, `perms`, `allowed_paths`) in `add_user`, `delete_user`, and `update_user_perm` from URL query parameters to multipart `FormData` request bodies.
+  - Updated frontend `dev_src/script_admin_page.js` to dispatch `POST` requests with `FormData`.
+  - Added test suite `TestAdminEndpointsMethodSecurity` in `dev_src/tests/test_server_config_perms.py` verifying that state-changing admin actions are exclusively bound to POST and prohibited on GET/HEAD.
+- **Verification**:
+  - `ruff check dev_src`: Passed (0 errors).
+  - `pytest dev_src/tests`: Passed 141/141 tests.
 
 
