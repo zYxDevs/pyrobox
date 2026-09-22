@@ -37,11 +37,42 @@ class TestAnonymousServerPerms:
 		member = anonymous_config.user_handler.create_user('mem', 'acct-pass')
 
 		assert not guest.MEMBER
-		assert anonymous_config.PASSWORD == 'SECret'
+		assert anonymous_config.PASSWORD
+		assert len(anonymous_config.PASSWORD) >= 8
 
 		assert member.MEMBER
 		assert member.check_password('acct-pass')
-		assert not member.check_password('SECret')
+		assert not member.check_password(anonymous_config.PASSWORD)
+
+	def test_explicit_upload_password(self):
+		from pyrobox_ServerHost import ServerConfig
+		cfg = ServerConfig(make_cli_args(password='custom_pass_123'))
+		assert cfg.PASSWORD == 'custom_pass_123'
+
+	def test_random_upload_password_unique_when_omitted(self):
+		from pyrobox_ServerHost import ServerConfig
+		cfg1 = ServerConfig(make_cli_args(password=None))
+		cfg2 = ServerConfig(make_cli_args(password=None))
+		assert cfg1.PASSWORD != cfg2.PASSWORD
+		assert len(cfg1.PASSWORD) >= 8
+
+	def test_anonymous_guest_has_no_modify_or_delete_by_default(self, anonymous_config):
+		assert permits.MODIFY not in anonymous_config.guest_perms
+		assert permits.DELETE not in anonymous_config.guest_perms
+
+	def test_named_server_guest_defaults_read_only(self):
+		from pyrobox_ServerHost import ServerConfig
+		cfg = ServerConfig(make_cli_args(
+			server_name='testsrv_perms',
+			admin_id='admin',
+			admin_pass='adminpass',
+			guest_allowed=True,
+		))
+		assert permits.VIEW in cfg.guest_perms
+		assert permits.DOWNLOAD in cfg.guest_perms
+		assert permits.UPLOAD not in cfg.guest_perms
+		assert permits.MODIFY not in cfg.guest_perms
+		assert permits.DELETE not in cfg.guest_perms
 
 
 class TestCliPermissionFlags:

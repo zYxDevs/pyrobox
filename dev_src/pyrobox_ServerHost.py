@@ -1,6 +1,7 @@
 import argparse
 from http import HTTPStatus
 import os
+import secrets
 from typing import Tuple, Union
 import urllib.parse
 
@@ -10,7 +11,7 @@ from pyroDB3 import PickleTable
 import user_mgmt as u_mgmt
 from user_mgmt import User
 
-from pyroboxCore import config as CoreConfig, SimpleHTTPRequestHandler as SH_base, SimpleCookie, tools
+from pyroboxCore import config as CoreConfig, SimpleHTTPRequestHandler as SH_base, SimpleCookie, logger, tools
 
 
 from string import Template
@@ -27,7 +28,12 @@ class ServerConfig():
 		self.admin_username = cli_args.admin_id
 		self.admin_password = cli_args.admin_pass
 		# Guest/anonymous upload gate (CLI --password); not an account password
-		self.PASSWORD = getattr(cli_args, 'password', 'SECret')
+		cli_pass = getattr(cli_args, 'password', None)
+		if not cli_pass:
+			self.PASSWORD = secrets.token_urlsafe(9)
+			logger.info(tools.text_box("Upload Password", f"Generated random upload password: {self.PASSWORD}"))
+		else:
+			self.PASSWORD = cli_pass
 
 		self.uDB = PickleTable()
 		self.configDB = PickleTable()
@@ -166,28 +172,34 @@ class ServerConfig():
 		if self.DefaultPerms["value"].get("guest", None):
 			self.guest_perms = User.unpack_permission_to_list(self.DefaultPerms["value"]["guest"])
 		elif not self.name:
-			# Copy list — do not alias member_perms (remove would mutate both)
-			self.guest_perms = list(self.member_perms)
-			if permits.MEMBER in self.guest_perms:
-				self.guest_perms.remove(permits.MEMBER)
-
-		else:
+			# Anonymous server: guests have VIEW, DOWNLOAD, ZIP, and UPLOAD (gated by upload password).
+			# They do NOT have MODIFY or DELETE permissions by default.
 			self.guest_perms = [
-				check(cli_args.guest_allowed, permits.VIEW),
+				permits.VIEW,
 				check(not cli_args.no_upload, permits.UPLOAD),
 				check(not cli_args.no_zip, permits.ZIP),
-				check(not cli_args.no_modify, permits.MODIFY),
-				check(not cli_args.no_delete, permits.DELETE),
 				check(not cli_args.no_download, permits.DOWNLOAD),
 			]
 
 			if cli_args.view_only or cli_args.read_only:
 				remove_perm(self.guest_perms, permits.UPLOAD)
-				remove_perm(self.guest_perms, permits.MODIFY)
-				remove_perm(self.guest_perms, permits.DELETE)
 
 			if cli_args.view_only:
 				remove_perm(self.guest_perms, permits.DOWNLOAD)
+				remove_perm(self.guest_perms, permits.ZIP)
+
+		else:
+			# Named server: unauthenticated guests are read-only (VIEW, DOWNLOAD, ZIP).
+			# They do NOT have UPLOAD, MODIFY, or DELETE permissions.
+			self.guest_perms = [
+				check(cli_args.guest_allowed, permits.VIEW),
+				check(not cli_args.no_zip, permits.ZIP),
+				check(not cli_args.no_download, permits.DOWNLOAD),
+			]
+
+			if cli_args.view_only:
+				remove_perm(self.guest_perms, permits.DOWNLOAD)
+				remove_perm(self.guest_perms, permits.ZIP)
 
 
 		# remove None values
