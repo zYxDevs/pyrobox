@@ -29,3 +29,26 @@ def test_pyrobox_core_imports_without_project_files(tmp_path):
 	)
 
 	assert result.returncode == 0, result.stderr
+
+
+def test_deal_post_data_check_size_limit():
+	import pytest
+	from pyroboxCore import DealPostData, PostError
+
+	class DummyHandler:
+		headers = {'content-type': 'application/json', 'content-length': '500'}
+
+	dpd = DealPostData(DummyHandler())
+	dpd.content_length = 500
+
+	# Unlimited (-1) should not raise
+	dpd.check_size_limit(max_size=-1)
+
+	# Within limit should not raise
+	dpd.check_size_limit(max_size=1000)
+	dpd.check_size_limit(max_size=500)
+
+	# Exceeding limit should raise PostError
+	with pytest.raises(PostError):
+		dpd.check_size_limit(max_size=499)
+

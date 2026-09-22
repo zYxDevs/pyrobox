@@ -254,7 +254,7 @@ class ServerHost(SH_base):
 		Return HTML page for the directory listing
 		"""
 
-		if user.NOPERMISSION or user.VIEW == False:
+		if user.NOPERMISSION or not user.VIEW:
 			return self.send_error(HTTPStatus.UNAUTHORIZED, "You don't have permission to see file list", cookie=cookie)
 
 

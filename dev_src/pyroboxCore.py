@@ -2285,7 +2285,7 @@ class DealPostData:
 		* check if content size is within limit
 		* return True if within limit
 		"""
-		if not max_size < 0 or self.content_length <= max_size:
+		if max_size >= 0 and self.content_length > max_size:
 			raise PostError(
 				f"Content size limit exceeded: {self.content_length} > {max_size}")
 
@@ -2433,7 +2433,7 @@ class FormData:
 			raise PostError("Not multipart")
 
 		line = self.dpd.get()
-		if not self.boundary in line:
+		if self.boundary not in line:
 			self.req.log_error(f"Content boundary missing on line {self.dpd.num}\n", [
 							   line, self.boundary])
 
@@ -2736,7 +2736,7 @@ def build(HandlerClass=BaseHTTPRequestHandler,
 	if sys.version_info >= (3, 8):  # BACKWARD COMPATIBILITY
 		ServerClass.address_family, addr = _get_best_family(bind, port)
 	else:
-		addr = (bind if bind != None else '', port)
+		addr = (bind if bind is not None else '', port)
 
 	HandlerClass.protocol_version = protocol
 	httpd = ServerClass(addr, HandlerClass)

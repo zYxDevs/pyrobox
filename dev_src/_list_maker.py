@@ -121,7 +121,7 @@ def list_directory_json(self:SH, path=None, user:User=None):
 	Helper to produce a directory listing (JSON).
 	Return json file of available files and folders
 	"""
-	if path == None:
+	if path is None:
 		path = self.translate_path(self.path)
 
 	try:
@@ -164,7 +164,7 @@ def list_directory_html(self:SH, path, user:User, cookie:Union[SimpleCookie, str
 	interface the same as for send_head().
 
 	"""
-	if user.NOPERMISSION or user.VIEW == False:
+	if user.NOPERMISSION or not user.VIEW:
 		return self.send_error(HTTPStatus.UNAUTHORIZED, "You don't have permission to see file list", cookie=cookie)
 
 

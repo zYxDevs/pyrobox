@@ -1033,7 +1033,7 @@ class PyroDB(object):
 		Delete a key
 		"""
 		self._auto_rescan(rescan=rescan)
-		if not key in self.db:  # return False instead of an exception
+		if key not in self.db:  # return False instead of an exception
 			return False
 		del self.db[key]
 		self._autodumpdb(AD=AD)
@@ -1686,7 +1686,7 @@ class PyroTable(dict):
 				diff = tsize - csize
 
 				if name in self.column_names_set:
-					if exist_ok == True or exist_ok == "name":
+					if exist_ok is True or exist_ok == "name":
 						pass
 					elif exist_ok == "overwrite":
 						if diff > 0:
@@ -1708,7 +1708,7 @@ class PyroTable(dict):
 
 				tsize = self.height
 				if name in self._pk.db:
-					if exist_ok == True:
+					if exist_ok is True:
 						tsize = self.height - len(self._pk.db[name])
 						if not tsize:  # 0 cells to add
 							return
@@ -3326,7 +3326,7 @@ class PyroTable(dict):
 						col = f"Unnamed-{n}"
 						n += 1
 
-					if not (col in columns_names):
+					if col not in columns_names:
 						if ignore_new_headers:
 							continue
 						if col in updated_columns:
