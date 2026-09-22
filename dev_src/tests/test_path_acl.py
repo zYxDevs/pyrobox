@@ -98,3 +98,30 @@ class TestPathAclAllowDeny:
 		assert member_user.is_path_allowed('/data/private') is False
 		assert member_user.is_path_allowed('/data/public') is True
 		assert member_user.is_path_allowed('/data/public/x') is True
+
+
+class TestEndpointAclEnforcement:
+	def test_path_allowed_for_file_mutation_and_query_endpoints(self, member_user):
+		member_user.set_allowed_paths([
+			{'path': '/allowed', 'subdirs': True, 'type': 'allow'},
+		])
+		# Allowed path operations
+		assert member_user.is_path_allowed('/allowed/file.txt') is True
+		assert member_user.is_path_allowed('/allowed/sub/dir') is True
+
+		# Disallowed operations (must fail ACL check for upload, delete, rename, edit, size, etc.)
+		assert member_user.is_path_allowed('/forbidden') is False
+		assert member_user.is_path_allowed('/forbidden/target.txt') is False
+		assert member_user.is_path_allowed('/etc/passwd') is False
+
+	def test_rename_both_source_and_destination_must_be_allowed(self, member_user):
+		member_user.set_allowed_paths([
+			{'path': '/sandbox', 'subdirs': True, 'type': 'allow'},
+		])
+		# Both inside sandbox: permitted
+		assert member_user.is_path_allowed('/sandbox/old.txt') and member_user.is_path_allowed('/sandbox/new.txt')
+		# Source outside: forbidden
+		assert not (member_user.is_path_allowed('/secret/old.txt') and member_user.is_path_allowed('/sandbox/new.txt'))
+		# Destination outside: forbidden
+		assert not (member_user.is_path_allowed('/sandbox/old.txt') and member_user.is_path_allowed('/secret/new.txt'))
+

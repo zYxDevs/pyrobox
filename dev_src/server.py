@@ -502,6 +502,9 @@ def get_size(self: SH, *args, **kwargs):
 		return self.send_text(pt.login_page(), code=HTTPStatus.UNAUTHORIZED, cookie=cookie)
 
 	url_path = kwargs.get('url_path', '')
+	if not user.is_path_allowed(url_path):
+		return self.send_error(code=HTTPStatus.NOT_FOUND, message="File not found", cookie=cookie)
+
 	os_path = self.translate_path(url_path)
 
 	stat = get_stat(os_path)
@@ -532,6 +535,9 @@ def get_size_n_count(self: SH, *args, **kwargs):
 		return self.send_text(pt.login_page(), code=HTTPStatus.UNAUTHORIZED, cookie=cookie)
 
 	url_path = kwargs.get('url_path', '')
+	if not user.is_path_allowed(url_path):
+		return self.send_error(code=HTTPStatus.NOT_FOUND, message="File not found", cookie=cookie)
+
 	os_path = self.translate_path(url_path)
 
 	stat = get_stat(os_path)
@@ -570,6 +576,10 @@ def get_zip_id(self: SH, *args, **kwargs):
 
 	if CoreConfig.disabled_func["zip"]:
 		return self.return_txt("ERROR: ZIP FEATURE IS UNAVAILABLE !", code=HTTPStatus.INTERNAL_SERVER_ERROR, cookie=cookie)
+
+	url_path = kwargs.get('url_path', '')
+	if not user.is_path_allowed(url_path):
+		return self.send_error(code=HTTPStatus.NOT_FOUND, message="Directory not found", cookie=cookie)
 
 	os_path = kwargs.get('path', '')
 	spathsplit = kwargs.get('spathsplit', '')
@@ -619,6 +629,9 @@ def create_zip(self: SH, *args, **kwargs):
 		return self.return_txt("ERROR: ZIP FEATURE IS UNAVAILABLE !", code=HTTPStatus.INTERNAL_SERVER_ERROR, cookie=cookie)
 
 	url_path = kwargs.get('url_path', '')
+	if not user.is_path_allowed(url_path):
+		return self.send_error(code=HTTPStatus.NOT_FOUND, message="Directory not found", cookie=cookie)
+
 	os_path = self.translate_path(url_path)
 
 	# if not dir or not exists
@@ -662,6 +675,10 @@ def get_zip(self: SH, *args, **kwargs):
 
 	if CoreConfig.disabled_func["zip"]:
 		return self.return_txt("ERROR: ZIP FEATURE IS UNAVAILABLE !", code=HTTPStatus.INTERNAL_SERVER_ERROR, cookie=cookie)
+
+	url_path = kwargs.get('url_path', '')
+	if not user.is_path_allowed(url_path):
+		return self.send_error(code=HTTPStatus.NOT_FOUND, message="Directory not found", cookie=cookie)
 
 	os_path = kwargs.get('path', '')
 	spathsplit = kwargs.get('spathsplit', '')
@@ -870,6 +887,9 @@ def send_code_data(self: SH, *args, **kwargs):
 	os_path = kwargs.get('path', '')
 	url_path = kwargs.get('url_path', '')
 
+	if not user.is_path_allowed(url_path):
+		return self.send_error(code=HTTPStatus.NOT_FOUND, message="File not found", cookie=cookie)
+
 	# Check if it's a supported text file
 	supported_extensions = {
 		'.py', '.js', '.ts', '.tsx', '.jsx', '.html', '.htm', '.css', '.scss', '.less',
@@ -1050,6 +1070,13 @@ def save_code_file(self: SH, *args, **kwargs):
 		return self.send_json({
 			"status": "error",
 			"message": "You don't have permission to modify files"
+		}, code=HTTPStatus.FORBIDDEN, cookie=cookie)
+
+	url_path = kwargs.get('url_path', '')
+	if not user.is_path_allowed(url_path):
+		return self.send_json({
+			"status": "error",
+			"message": "Permission Denied: Path not allowed"
 		}, code=HTTPStatus.FORBIDDEN, cookie=cookie)
 
 	os_path = kwargs.get('path', '')
@@ -1569,6 +1596,11 @@ def upload(self: SH, *args, **kwargs):
 			upload_handler.kill()
 			return self.send_txt("Invalid Path:  " + rltv_path, code=HTTPStatus.BAD_REQUEST, cookie=cookie)
 
+		if not user.is_path_allowed(rltv_path):
+			logger.warning(f"Upload path forbidden by ACL: {rltv_path} by {uid}")
+			upload_handler.kill()
+			return self.send_txt("Permission Denied: Path not allowed", code=HTTPStatus.FORBIDDEN, cookie=cookie)
+
 		os_f_path = self.resolve_child_path(url_path, fn)
 		if not os_f_path:
 			logger.warning(f"Upload path escaped root: {fn} by {uid}")
@@ -1675,6 +1707,9 @@ def del_2_recycle(self: SH, *args, **kwargs):
 	if not self.path_safety_check(filename, rel_path):
 		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
 
+	if not user.is_path_allowed(rel_path):
+		return self.send_json({"status": False, "head": "Failed", "body": "Permission Denied: Path not allowed"}, cookie=cookie)
+
 	os_f_path = self.resolve_child_path(url_path, filename)
 	if not os_f_path:
 		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
@@ -1728,6 +1763,9 @@ def del_permanently(self: SH, *args, **kwargs):
 
 	if not self.path_safety_check(filename, rel_path):
 		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
+
+	if not user.is_path_allowed(rel_path):
+		return self.send_json({"status": False, "head": "Failed", "body": "Permission Denied: Path not allowed"}, cookie=cookie)
 
 	os_f_path = self.resolve_child_path(url_path, filename)
 	if not os_f_path:
@@ -1788,6 +1826,9 @@ def rename_content(self: SH, *args, **kwargs):
 	if not self.path_safety_check(filename, new_name, rel_path, new_rel_path):
 		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
 
+	if not user.is_path_allowed(rel_path) or not user.is_path_allowed(new_rel_path):
+		return self.send_json({"status": False, "head": "Failed", "body": "Permission Denied: Path not allowed"}, cookie=cookie)
+
 	os_f_path = self.resolve_child_path(url_path, filename)
 	os_new_f_path = self.resolve_child_path(url_path, new_name)
 	if not os_f_path or not os_new_f_path:
@@ -1837,6 +1878,9 @@ def get_info(self: SH, *args, **kwargs):
 
 	if not self.path_safety_check(filename, rel_path):
 		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
+
+	if not user.is_path_allowed(rel_path):
+		return self.send_json({"status": False, "head": "Failed", "body": "Permission Denied: Path not allowed"}, cookie=cookie)
 
 	os_f_path = self.resolve_child_path(url_path, filename)
 	if not os_f_path:
@@ -1942,6 +1986,9 @@ def new_folder(self: SH, *args, **kwargs):
 
 	if not self.path_safety_check(filename, rel_path):
 		return self.send_json({"status": False, "head": "Failed", "body": "Invalid Path:  " + rel_path}, cookie=cookie)
+
+	if not user.is_path_allowed(rel_path):
+		return self.send_json({"status": False, "head": "Failed", "body": "Permission Denied: Path not allowed"}, cookie=cookie)
 
 	os_f_path = self.resolve_child_path(url_path, filename)
 	if not os_f_path:
