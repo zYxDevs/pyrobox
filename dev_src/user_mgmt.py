@@ -7,6 +7,16 @@ from typing import Tuple, List, TypeVar, Union, TYPE_CHECKING
 import posixpath
 from urllib.parse import unquote
 import json
+import re
+
+VALID_USERNAME_REGEX = re.compile(r'^[a-zA-Z0-9_.-]{3,32}$')
+
+
+def is_valid_username(username: str) -> bool:
+	if not username or not isinstance(username, str):
+		return False
+	return bool(VALID_USERNAME_REGEX.match(username))
+
 
 if TYPE_CHECKING:
 	from pyrobox_ServerHost import ServerHost as SH
@@ -39,7 +49,8 @@ __all__ = [
 	"UserPermission",
 	"permits",
 	"create_user_cookie",
-	"clear_user_cookie"
+	"clear_user_cookie",
+	"is_valid_username"
 ]
 
 
@@ -474,6 +485,9 @@ class User_handler:
 
 
 	def create_user(self, username, password, is_admin=False) -> User:
+		if not is_valid_username(username):
+			raise ValueError(f"Invalid username: {username!r}. Must be 3-32 alphanumeric characters, '.', '-', or '_'.")
+
 		p_hash = token = None
 		uid = hashlib.sha1((str(time.time()) + username).encode("utf-8")).hexdigest()
 
@@ -538,6 +552,12 @@ class User_handler:
 		return user
 
 	def server_signup(self, username, password) -> dict:
+		if not is_valid_username(username):
+			return {
+				"status": "error",
+				"message": "Invalid username format. Must be 3-32 characters (letters, numbers, '.', '-', '_')."
+			}
+
 		# check if username is already taken
 		if self.get_user(username, temp=True) is not None:
 			return {

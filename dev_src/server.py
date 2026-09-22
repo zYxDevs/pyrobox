@@ -421,6 +421,9 @@ def add_user(self: SH, *args, **kwargs):
 	if not (username and password):
 		return self.send_json({"status": False, "message": "Username or password not provided"}, cookie=cookie)
 
+	if not u_mgmt.is_valid_username(username):
+		return self.send_json({"status": False, "message": "Invalid username format. Must be 3-32 alphanumeric characters, '.', '-', or '_'."}, cookie=cookie)
+
 	if Sconfig.user_handler.get_user(username):
 		return self.send_json({"status": False, "message": "Username already exists"}, cookie=cookie)
 
@@ -1467,6 +1470,9 @@ def handle_signup_post(self: SH, *args, **kwargs):
 		return self.send_json({"status": "failed", "message": "Username not provided"}, cookie=cookie)
 
 	username = username.strip()
+
+	if not u_mgmt.is_valid_username(username):
+		return self.send_json({"status": "failed", "message": "Invalid username format. Must be 3-32 alphanumeric characters, '.', '-', or '_'."}, cookie=cookie)
 
 	# GET PASSWORD
 	password = form.get_multi_field(verify_name='password', decode=T)[1]

@@ -109,9 +109,19 @@ class Admin_tools {
 		}
 
 		for (i = 0; i < this.user_list.length; i++) {
+			const index = i;
+			const username = this.user_list[i];
 			var row = table.insertRow(-1);
-			row.innerHTML = "<td>" + this.user_list[i] + "</td><td><div class='pagination' onclick='admin_tools.manage_user(" + i +
-				")'>Manage</div></td></td><td>";
+
+			var tdUser = row.insertCell(0);
+			tdUser.textContent = username;
+
+			var tdAction = row.insertCell(1);
+			var manageBtn = createElement("div");
+			manageBtn.className = "pagination";
+			manageBtn.textContent = "Manage";
+			manageBtn.onclick = () => admin_tools.manage_user(index);
+			tdAction.appendChild(manageBtn);
 		}
 	}
 
@@ -121,6 +131,7 @@ class Admin_tools {
 
 	manage_user(index) {
 		var username = this.user_list[index];
+		this.selected_user = username;
 
 
 		const client_page_html = `
@@ -339,9 +350,9 @@ keep the submit button in center, modernize the button UI-->
 
 	var submit = document.getElementById("submit");
 
-	var username = "${username}";
+	var username = admin_tools.selected_user;
 	var _user = new User();
-	fetch('/?get_user_perm&username=' + username)
+	fetch('/?get_user_perm&username=' + encodeURIComponent(username))
 	.then(response => response.json())
 	.then(data => {
 		if (data.status) {
@@ -405,7 +416,7 @@ keep the submit button in center, modernize the button UI-->
 		});
 		var paths = encodeURIComponent(JSON.stringify(paths_data));
 
-		fetch('/?update_user_perm&username=' + username + "&perms=" + perms + "&allowed_paths=" + paths)
+		fetch('/?update_user_perm&username=' + encodeURIComponent(username) + "&perms=" + perms + "&allowed_paths=" + paths)
 		.then(response => response.json())
 		.then(data => {
 			if (data.self_kick) {
@@ -447,7 +458,7 @@ keep the submit button in center, modernize the button UI-->
 		var username = this.user_list[index];
 		r_u_sure({
 			y: () => {
-				fetch('/?delete_user&username=' + username)
+				fetch('/?delete_user&username=' + encodeURIComponent(username))
 					.then(response => response.json())
 					.then(data => {
 						if (data.status) {

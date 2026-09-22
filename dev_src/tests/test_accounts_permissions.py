@@ -164,3 +164,48 @@ class TestCookieAuth:
 			req, allow_guests=True, guest_user=guest_user)
 		assert user.username == 'alice'
 		assert user is not guest_user
+
+
+class TestUsernameValidation:
+	"""Tests ensuring usernames reject HTML tags, XSS payloads, and invalid characters."""
+
+	@pytest.mark.parametrize(
+		'username',
+		[
+			'<script>alert(1)</script>',
+			'user"name',
+			"user'name",
+			'user name',
+			'us',
+			'a' * 33,
+			'',
+			'user;test',
+			'user&name',
+			'user/path',
+			'user\\path',
+		],
+	)
+	def test_invalid_usernames_rejected(self, user_handler, username):
+		from user_mgmt import is_valid_username
+		assert not is_valid_username(username)
+		with pytest.raises(ValueError):
+			user_handler.create_user(username, 'valid_pass')
+
+		resp = user_handler.server_signup(username, 'valid_pass')
+		assert resp['status'] == 'error'
+
+	@pytest.mark.parametrize(
+		'username',
+		[
+			'alice',
+			'bob_123',
+			'user-name',
+			'user.name',
+			'Admin',
+			'Guest',
+		],
+	)
+	def test_valid_usernames_accepted(self, user_handler, username):
+		from user_mgmt import is_valid_username
+		assert is_valid_username(username)
+
